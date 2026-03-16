@@ -10,6 +10,8 @@ export const RATINGS_FILE = path.join(DATA_DIR, "ratings.json");
 export const PHONES_LOG = path.join(DATA_DIR, "phone_reveals.json");
 export const IMPORT_QUEUE_FILE = path.join(DATA_DIR, "import_queue.json");
 export const STATUSES_FILE = path.join(DATA_DIR, "statuses.json");
+export const MARKET_CACHE_FILE = path.join(DATA_DIR, "market_cache.json");
+export { DATA_DIR };
 
 export async function ensureDir() {
   try {

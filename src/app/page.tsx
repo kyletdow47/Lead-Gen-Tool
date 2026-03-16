@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import type { DailyData, Deal, DealStatus, IntelSection, ConsequenceChain } from "@/lib/types";
+import { useState, useEffect, useCallback, useRef } from "react";
+import type { DailyData, Deal, DealStatus, IntelSection, ConsequenceChain, CoachBrief, PracticeMessage, AgentMessage } from "@/lib/types";
 
 // ─── AUTH GATE ───────────────────────────────────────────────
 function AuthGate({ onAuth }: { onAuth: () => void }) {
@@ -52,7 +52,59 @@ function AuthGate({ onAuth }: { onAuth: () => void }) {
 // ─── MARKET & INTELLIGENCE ───────────────────────────────────
 function MarketPanel({ data }: { data: DailyData }) {
   const [tab, setTab] = useState<"snapshot" | "intelligence" | "chains">("snapshot");
+  const [freshMarket, setFreshMarket] = useState<any>(null);
+  const [marketRefreshing, setMarketRefreshing] = useState(false);
+  const refreshAttempted = useRef(false);
   const { marketSnapshot: m, marketIntelligence: intel, consequenceChains: chains } = data;
+
+  // Auto-refresh market data if daily data is stale
+  useEffect(() => {
+    if (refreshAttempted.current) return;
+    refreshAttempted.current = true;
+    const today = new Date().toISOString().split("T")[0];
+    if (data.date === today && m.brent) return; // Fresh enough
+
+    (async () => {
+      // Check cache first
+      try {
+        const cacheRes = await fetch("/api/market");
+        if (cacheRes.ok) {
+          const cacheJson = await cacheRes.json();
+          if (cacheJson.fresh && cacheJson.snapshot) {
+            setFreshMarket(cacheJson.snapshot);
+            return;
+          }
+        }
+      } catch {}
+      // Fetch fresh
+      setMarketRefreshing(true);
+      try {
+        const res = await fetch("/api/market", { method: "POST" });
+        if (res.ok) {
+          const json = await res.json();
+          if (json.snapshot) setFreshMarket(json.snapshot);
+        }
+      } catch {}
+      setMarketRefreshing(false);
+    })();
+  }, [data.date, m.brent]);
+
+  const refreshMarket = async () => {
+    setMarketRefreshing(true);
+    try {
+      const res = await fetch("/api/market", { method: "POST" });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.snapshot) setFreshMarket(json.snapshot);
+      }
+    } catch {}
+    setMarketRefreshing(false);
+  };
+
+  // Merge fresh data over daily data
+  const displaySnapshot = freshMarket
+    ? { ...m, ...freshMarket, keyHeadlines: freshMarket.keyHeadlines }
+    : m;
 
   const tabs: { key: typeof tab; label: string }[] = [
     { key: "snapshot", label: "Snapshot" },
@@ -79,12 +131,25 @@ function MarketPanel({ data }: { data: DailyData }) {
             </button>
           ))}
         </div>
-        <span className="text-xs text-flyfx-muted pb-2">{data.date}</span>
+        <div className="flex items-center gap-2 pb-2">
+          {freshMarket?.fetchedAt && (
+            <span className="text-[10px] text-green-400">Live</span>
+          )}
+          <span className="text-xs text-flyfx-muted">{data.date}</span>
+          <button onClick={refreshMarket} disabled={marketRefreshing}
+            className="text-flyfx-muted hover:text-flyfx-gold transition disabled:opacity-50">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+              className={marketRefreshing ? "animate-spin" : ""}>
+              <path d="M23 4v6h-6M1 20v-6h6" />
+              <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {/* Tab content */}
       <div className="p-4">
-        {tab === "snapshot" && <SnapshotTab m={m} />}
+        {tab === "snapshot" && <SnapshotTab m={displaySnapshot} headlines={freshMarket?.keyHeadlines} />}
         {tab === "intelligence" && <IntelligenceTab intel={intel} />}
         {tab === "chains" && <ChainsTab chains={chains} />}
       </div>
@@ -92,9 +157,9 @@ function MarketPanel({ data }: { data: DailyData }) {
   );
 }
 
-function SnapshotTab({ m }: { m: DailyData["marketSnapshot"] }) {
+function SnapshotTab({ m, headlines }: { m: DailyData["marketSnapshot"]; headlines?: string[] }) {
   const extraKeys = Object.keys(m).filter(
-    (k) => !["brent", "ttfGas", "hormuzStatus", "topTalkingPoint"].includes(k)
+    (k) => !["brent", "ttfGas", "hormuzStatus", "topTalkingPoint", "keyHeadlines", "fetchedAt"].includes(k)
   );
 
   return (
@@ -113,6 +178,16 @@ function SnapshotTab({ m }: { m: DailyData["marketSnapshot"] }) {
             Say this on every call
           </p>
           <p className="text-sm leading-relaxed">{m.topTalkingPoint}</p>
+        </div>
+      )}
+      {headlines && headlines.length > 0 && (
+        <div className="space-y-1.5">
+          <p className="text-[10px] text-flyfx-muted uppercase tracking-wider">Key headlines</p>
+          {headlines.map((h: string, i: number) => (
+            <div key={i} className="bg-flyfx-dark rounded-lg px-3 py-2 border border-flyfx-border">
+              <p className="text-xs leading-relaxed text-flyfx-muted">{h}</p>
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -1241,6 +1316,480 @@ function LiveSearchView() {
   );
 }
 
+// ─── COACH VIEW ─────────────────────────────────────────────
+function CoachView({ deals }: { deals?: Deal[] }) {
+  const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
+  const [customLead, setCustomLead] = useState({ name: "", title: "", company: "", city: "", country: "", employees: "", specialisation: "" });
+  const [brief, setBrief] = useState<CoachBrief | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [practiceMode, setPracticeMode] = useState(false);
+  const [practiceMessages, setPracticeMessages] = useState<PracticeMessage[]>([]);
+  const [practiceInput, setPracticeInput] = useState("");
+  const [practiceLoading, setPracticeLoading] = useState(false);
+  const [feedback, setFeedback] = useState<any>(null);
+  const [feedbackLoading, setFeedbackLoading] = useState(false);
+  const [inputMode, setInputMode] = useState<"select" | "custom">("select");
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  const kyleDeals = deals?.filter(d => d.assignedTo === "kyle" || d.assignedTo === "shared") || [];
+
+  const getCoachBrief = async (lead: any) => {
+    setLoading(true);
+    setBrief(null);
+    setPracticeMode(false);
+    setPracticeMessages([]);
+    setFeedback(null);
+    try {
+      const res = await fetch("/api/coach", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "brief", lead }),
+      });
+      const json = await res.json();
+      if (json.brief) setBrief(json.brief);
+    } catch {}
+    setLoading(false);
+  };
+
+  const sendPractice = async () => {
+    if (!practiceInput.trim()) return;
+    const lead = selectedDeal || customLead;
+    const newMsg: PracticeMessage = { role: "kyle", text: practiceInput.trim() };
+    const updated = [...practiceMessages, newMsg];
+    setPracticeMessages(updated);
+    setPracticeInput("");
+    setPracticeLoading(true);
+    try {
+      const res = await fetch("/api/coach", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "practice", lead, messages: updated }),
+      });
+      const json = await res.json();
+      if (json.response) {
+        setPracticeMessages(prev => [...prev, { role: "prospect", text: json.response }]);
+      }
+    } catch {}
+    setPracticeLoading(false);
+    setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
+  };
+
+  const getFeedback = async () => {
+    const lead = selectedDeal || customLead;
+    setFeedbackLoading(true);
+    try {
+      const res = await fetch("/api/coach", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "feedback", lead, messages: practiceMessages }),
+      });
+      const json = await res.json();
+      if (json.feedback) setFeedback(json.feedback);
+    } catch {}
+    setFeedbackLoading(false);
+  };
+
+  const readinessColor = brief?.readiness === "ready" ? "text-green-400 bg-green-500/20 border-green-500/30"
+    : brief?.readiness === "needs_prep" ? "text-amber-400 bg-amber-500/20 border-amber-500/30"
+    : "text-red-400 bg-red-500/20 border-red-500/30";
+
+  return (
+    <div className="space-y-4">
+      {/* Lead Selector */}
+      <div className="bg-flyfx-card border border-flyfx-border rounded-xl p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold">Select a lead to coach</h2>
+          <div className="flex items-center gap-0.5 bg-flyfx-dark rounded-lg p-0.5 border border-flyfx-border">
+            <button onClick={() => setInputMode("select")}
+              className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition ${inputMode === "select" ? "bg-flyfx-gold text-black" : "text-flyfx-muted"}`}>
+              From deals
+            </button>
+            <button onClick={() => setInputMode("custom")}
+              className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition ${inputMode === "custom" ? "bg-flyfx-gold text-black" : "text-flyfx-muted"}`}>
+              Custom
+            </button>
+          </div>
+        </div>
+
+        {inputMode === "select" ? (
+          kyleDeals.length > 0 ? (
+            <div className="space-y-1.5 max-h-48 overflow-y-auto">
+              {kyleDeals.map((d) => (
+                <button key={d.rank} onClick={() => { setSelectedDeal(d); getCoachBrief(d); }}
+                  className={`w-full text-left px-3 py-2 rounded-lg border text-xs transition ${
+                    selectedDeal?.rank === d.rank
+                      ? "border-flyfx-gold bg-flyfx-gold/10"
+                      : "border-flyfx-border hover:border-flyfx-gold/40"
+                  }`}>
+                  <span className="font-semibold">{d.name}</span>
+                  <span className="text-flyfx-muted ml-1">— {d.title} at {d.company}, {d.city}</span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="text-flyfx-muted text-xs">No daily deals loaded. Use custom input or load deals first.</p>
+          )
+        ) : (
+          <div className="grid grid-cols-2 gap-2">
+            {(["name", "title", "company", "city", "country", "specialisation"] as const).map((field) => (
+              <input key={field} placeholder={field.charAt(0).toUpperCase() + field.slice(1)}
+                value={customLead[field]} onChange={(e) => setCustomLead(prev => ({ ...prev, [field]: e.target.value }))}
+                className="px-3 py-2 bg-flyfx-dark border border-flyfx-border rounded-lg text-xs text-white outline-none focus:border-flyfx-gold transition" />
+            ))}
+            <button onClick={() => getCoachBrief(customLead)} disabled={!customLead.name || !customLead.company || loading}
+              className="col-span-2 py-2 bg-flyfx-gold text-black rounded-lg text-xs font-semibold hover:opacity-90 transition disabled:opacity-50">
+              {loading ? "Analysing..." : "Coach me"}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Loading */}
+      {loading && (
+        <div className="bg-flyfx-card border border-flyfx-border rounded-xl p-8 text-center">
+          <div className="animate-pulse text-flyfx-gold text-sm">Analysing lead and preparing your coaching brief...</div>
+        </div>
+      )}
+
+      {/* Coaching Brief */}
+      {brief && !practiceMode && (
+        <div className="bg-flyfx-card border border-flyfx-border rounded-xl overflow-hidden">
+          <div className="px-4 py-3 border-b border-flyfx-border flex items-center justify-between">
+            <h3 className="text-sm font-semibold">Pre-Call Brief</h3>
+            <span className={`text-[10px] font-bold px-2 py-1 rounded border uppercase ${readinessColor}`}>
+              {brief.readiness === "ready" ? "Ready to call" : brief.readiness === "needs_prep" ? "Needs prep" : "Consider skipping"}
+            </span>
+          </div>
+          <div className="p-4 space-y-4">
+            {/* Confidence */}
+            <div className="bg-flyfx-dark rounded-lg p-3 border border-flyfx-border">
+              <p className="text-xs leading-relaxed">{brief.confidenceNote}</p>
+            </div>
+            {/* Approach */}
+            <div>
+              <p className="text-[10px] text-flyfx-muted uppercase tracking-wider mb-1">Approach</p>
+              <p className="text-xs leading-relaxed">{brief.approach}</p>
+            </div>
+            {/* Opening Line */}
+            <div className="bg-flyfx-gold/10 border border-flyfx-gold/20 rounded-lg p-3">
+              <p className="text-[10px] text-flyfx-gold uppercase tracking-wider mb-1">Your opening line</p>
+              <p className="text-sm leading-relaxed italic">&ldquo;{brief.openingLine}&rdquo;</p>
+            </div>
+            {/* Talking Points */}
+            <div>
+              <p className="text-[10px] text-flyfx-muted uppercase tracking-wider mb-1">Key talking points</p>
+              <ul className="space-y-1">
+                {brief.keyTalkingPoints.map((p, i) => (
+                  <li key={i} className="text-xs text-flyfx-muted flex items-start gap-2">
+                    <span className="text-flyfx-gold mt-0.5">&#x2022;</span>{p}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            {/* Objections */}
+            <div>
+              <p className="text-[10px] text-flyfx-muted uppercase tracking-wider mb-1">Likely objections</p>
+              <div className="space-y-2">
+                {brief.likelyObjections.map((o, i) => (
+                  <div key={i} className="bg-red-500/5 border border-red-500/10 rounded-lg p-2.5">
+                    <p className="text-xs font-semibold text-red-400 mb-1">&ldquo;{o.objection}&rdquo;</p>
+                    <p className="text-xs text-flyfx-muted">{o.response}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {/* What not to say */}
+            <div>
+              <p className="text-[10px] text-flyfx-muted uppercase tracking-wider mb-1">Avoid saying</p>
+              <div className="flex flex-wrap gap-1.5">
+                {brief.whatNotToSay.map((w, i) => (
+                  <span key={i} className="text-[10px] px-2 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/20">{w}</span>
+                ))}
+              </div>
+            </div>
+            {/* Score Explanation */}
+            <div className="bg-flyfx-dark rounded-lg p-3 border border-flyfx-border">
+              <p className="text-[10px] text-flyfx-muted uppercase tracking-wider mb-1">ICP score analysis</p>
+              <p className="text-xs leading-relaxed text-flyfx-muted">{brief.scoreExplanation}</p>
+            </div>
+            {/* Next Step */}
+            <div>
+              <p className="text-[10px] text-flyfx-muted uppercase tracking-wider mb-1">If interested — propose this</p>
+              <p className="text-xs leading-relaxed">{brief.nextStep}</p>
+            </div>
+            {/* Practice button */}
+            <button onClick={() => { setPracticeMode(true); setPracticeMessages([]); setFeedback(null); }}
+              className="w-full py-3 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-500 transition">
+              Practice this call
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Practice Mode */}
+      {practiceMode && (
+        <div className="bg-flyfx-card border border-flyfx-border rounded-xl overflow-hidden">
+          <div className="px-4 py-3 border-b border-flyfx-border flex items-center justify-between">
+            <h3 className="text-sm font-semibold">Practice call — {(selectedDeal || customLead).name}</h3>
+            <button onClick={() => setPracticeMode(false)} className="text-xs text-flyfx-muted hover:text-white transition">Back to brief</button>
+          </div>
+          <div className="p-4 space-y-3 max-h-96 overflow-y-auto">
+            {practiceMessages.length === 0 && (
+              <p className="text-xs text-flyfx-muted text-center py-4">Type your opening line to start the call. The prospect has just picked up the phone.</p>
+            )}
+            {practiceMessages.map((msg, i) => (
+              <div key={i} className={`flex ${msg.role === "kyle" ? "justify-end" : "justify-start"}`}>
+                <div className={`max-w-[80%] px-3 py-2 rounded-xl text-xs leading-relaxed ${
+                  msg.role === "kyle"
+                    ? "bg-flyfx-gold/20 text-white border border-flyfx-gold/30"
+                    : "bg-flyfx-dark text-flyfx-muted border border-flyfx-border"
+                }`}>
+                  <p className="text-[10px] font-bold mb-0.5 uppercase tracking-wider opacity-60">
+                    {msg.role === "kyle" ? "You (Kyle)" : "Prospect"}
+                  </p>
+                  {msg.text}
+                </div>
+              </div>
+            ))}
+            {practiceLoading && (
+              <div className="flex justify-start">
+                <div className="bg-flyfx-dark border border-flyfx-border rounded-xl px-3 py-2 text-xs text-flyfx-muted animate-pulse">
+                  Prospect is thinking...
+                </div>
+              </div>
+            )}
+            <div ref={chatEndRef} />
+          </div>
+          <div className="border-t border-flyfx-border p-3 space-y-2">
+            <div className="flex gap-2">
+              <input value={practiceInput} onChange={(e) => setPracticeInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && !practiceLoading && sendPractice()}
+                placeholder="What do you say?"
+                className="flex-1 px-3 py-2 bg-flyfx-dark border border-flyfx-border rounded-lg text-xs text-white outline-none focus:border-flyfx-gold transition" />
+              <button onClick={sendPractice} disabled={practiceLoading || !practiceInput.trim()}
+                className="px-4 py-2 bg-flyfx-gold text-black rounded-lg text-xs font-semibold hover:opacity-90 transition disabled:opacity-50">
+                Send
+              </button>
+            </div>
+            {practiceMessages.length >= 4 && !feedback && (
+              <button onClick={getFeedback} disabled={feedbackLoading}
+                className="w-full py-2 bg-blue-600 text-white rounded-lg text-xs font-semibold hover:bg-blue-500 transition disabled:opacity-50">
+                {feedbackLoading ? "Analysing..." : "Get coach feedback"}
+              </button>
+            )}
+          </div>
+          {/* Feedback */}
+          {feedback && (
+            <div className="border-t border-flyfx-border p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <h4 className="text-sm font-semibold">Coach Feedback</h4>
+                <span className={`text-xs font-bold px-2 py-0.5 rounded ${
+                  feedback.grade === "A" ? "bg-green-500/20 text-green-400"
+                    : feedback.grade === "B" ? "bg-blue-500/20 text-blue-400"
+                    : feedback.grade === "C" ? "bg-amber-500/20 text-amber-400"
+                    : "bg-red-500/20 text-red-400"
+                }`}>Grade: {feedback.grade}</span>
+              </div>
+              <p className="text-xs leading-relaxed">{feedback.overallNote}</p>
+              {feedback.whatWorked?.length > 0 && (
+                <div>
+                  <p className="text-[10px] text-green-400 uppercase tracking-wider mb-1">What worked</p>
+                  {feedback.whatWorked.map((w: string, i: number) => (
+                    <p key={i} className="text-xs text-flyfx-muted">+ {w}</p>
+                  ))}
+                </div>
+              )}
+              {feedback.whatToImprove?.length > 0 && (
+                <div>
+                  <p className="text-[10px] text-amber-400 uppercase tracking-wider mb-1">What to improve</p>
+                  {feedback.whatToImprove.map((w: string, i: number) => (
+                    <p key={i} className="text-xs text-flyfx-muted">- {w}</p>
+                  ))}
+                </div>
+              )}
+              {feedback.missedOpportunity && (
+                <div className="bg-flyfx-dark rounded-lg p-2.5 border border-flyfx-border">
+                  <p className="text-[10px] text-flyfx-muted uppercase tracking-wider mb-1">Missed opportunity</p>
+                  <p className="text-xs leading-relaxed">{feedback.missedOpportunity}</p>
+                </div>
+              )}
+              <button onClick={() => { setPracticeMessages([]); setFeedback(null); }}
+                className="w-full py-2 bg-flyfx-card border border-flyfx-border rounded-lg text-xs text-flyfx-muted hover:text-white transition">
+                Practice again
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── AGENT VIEW ─────────────────────────────────────────────
+function AgentView({ data }: { data?: DailyData | null }) {
+  const [messages, setMessages] = useState<AgentMessage[]>([]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  const SUGGESTIONS = [
+    "What verticals should I focus on this week?",
+    "Build a consequence chain for the current oil price movement",
+    "How should I handle 'we already have a broker'?",
+    "Critique my opening: 'Hi, Kyle from FlyFX, we do air cargo charters'",
+    "What's the difference between a HOT and WARM lead?",
+    "Generate a script for an energy logistics forwarder in Aberdeen",
+  ];
+
+  const buildContext = () => {
+    if (!data) return undefined;
+    const called = data.deals.filter(d => d.phone).length;
+    const email = data.deals.filter(d => !d.phone && d.email).length;
+    return `Today's deals: ${data.deals.length} loaded (${called} call track, ${email} email track). Date: ${data.date}. Market: Brent ${data.marketSnapshot.brent}, Hormuz: ${data.marketSnapshot.hormuzStatus}. Top talking point: ${data.marketSnapshot.topTalkingPoint}`;
+  };
+
+  const sendMessage = async (text?: string) => {
+    const content = text || input.trim();
+    if (!content) return;
+    setInput("");
+
+    const userMsg: AgentMessage = { role: "user", content };
+    const updated = [...messages, userMsg];
+    setMessages(updated);
+    setLoading(true);
+
+    const assistantMsg: AgentMessage = { role: "assistant", content: "" };
+    setMessages([...updated, assistantMsg]);
+
+    try {
+      const res = await fetch("/api/agent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: updated.map(m => ({ role: m.role, content: m.content })),
+          context: messages.length === 0 ? buildContext() : undefined,
+        }),
+      });
+
+      if (!res.ok) {
+        setMessages(prev => {
+          const copy = [...prev];
+          copy[copy.length - 1] = { role: "assistant", content: "Failed to connect to the agent. Check your API key." };
+          return copy;
+        });
+        setLoading(false);
+        return;
+      }
+
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let accumulated = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        accumulated += decoder.decode(value, { stream: true });
+        setMessages(prev => {
+          const copy = [...prev];
+          copy[copy.length - 1] = { role: "assistant", content: accumulated };
+          return copy;
+        });
+      }
+    } catch {
+      setMessages(prev => {
+        const copy = [...prev];
+        copy[copy.length - 1] = { role: "assistant", content: "Connection error. Please try again." };
+        return copy;
+      });
+    }
+    setLoading(false);
+    setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
+  };
+
+  // Simple markdown-ish rendering
+  const renderText = (text: string) => {
+    return text.split("\n").map((line, i) => {
+      if (line.startsWith("## ")) return <h3 key={i} className="text-sm font-bold mt-3 mb-1">{line.slice(3)}</h3>;
+      if (line.startsWith("### ")) return <h4 key={i} className="text-xs font-bold mt-2 mb-1 text-flyfx-gold">{line.slice(4)}</h4>;
+      if (line.startsWith("**") && line.endsWith("**")) return <p key={i} className="text-xs font-bold mt-1">{line.slice(2, -2)}</p>;
+      if (line.startsWith("- ")) return <p key={i} className="text-xs text-flyfx-muted ml-3">{line}</p>;
+      if (line.match(/^\d+\. /)) return <p key={i} className="text-xs text-flyfx-muted ml-3">{line}</p>;
+      if (line.trim() === "") return <br key={i} />;
+      // Inline bold
+      const parts = line.split(/(\*\*[^*]+\*\*)/g);
+      return (
+        <p key={i} className="text-xs leading-relaxed">
+          {parts.map((part, j) =>
+            part.startsWith("**") && part.endsWith("**")
+              ? <strong key={j} className="font-semibold text-white">{part.slice(2, -2)}</strong>
+              : part
+          )}
+        </p>
+      );
+    });
+  };
+
+  return (
+    <div className="flex flex-col" style={{ height: "calc(100vh - 80px)" }}>
+      {/* Chat messages */}
+      <div className="flex-1 overflow-y-auto space-y-3 pb-4">
+        {messages.length === 0 && (
+          <div className="text-center py-12 space-y-6">
+            <div>
+              <h2 className="text-lg font-bold">FlyFX Sales Agent</h2>
+              <p className="text-flyfx-muted text-xs mt-1">
+                Your specialist cargo charter sales strategist. Ask anything about ICP scoring, scripts, verticals, market analysis, or objection handling.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-lg mx-auto">
+              {SUGGESTIONS.map((s, i) => (
+                <button key={i} onClick={() => sendMessage(s)}
+                  className="text-left px-3 py-2.5 bg-flyfx-card border border-flyfx-border rounded-lg text-xs text-flyfx-muted hover:text-white hover:border-flyfx-gold/40 transition">
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {messages.map((msg, i) => (
+          <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+            <div className={`max-w-[85%] px-3 py-2.5 rounded-xl ${
+              msg.role === "user"
+                ? "bg-flyfx-gold/20 border border-flyfx-gold/30"
+                : "bg-flyfx-card border border-flyfx-border"
+            }`}>
+              {msg.role === "user"
+                ? <p className="text-xs leading-relaxed">{msg.content}</p>
+                : <div className="text-flyfx-muted">{msg.content ? renderText(msg.content) : <span className="text-xs animate-pulse">Thinking...</span>}</div>
+              }
+            </div>
+          </div>
+        ))}
+        <div ref={chatEndRef} />
+      </div>
+
+      {/* Input */}
+      <div className="border-t border-flyfx-border pt-3 pb-2">
+        <div className="flex gap-2">
+          <input value={input} onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && !loading && sendMessage()}
+            placeholder="Ask about ICP scoring, scripts, verticals, market analysis..."
+            className="flex-1 px-3 py-2.5 bg-flyfx-card border border-flyfx-border rounded-lg text-xs text-white outline-none focus:border-flyfx-gold transition" />
+          <button onClick={() => sendMessage()} disabled={loading || !input.trim()}
+            className="px-4 py-2.5 bg-flyfx-gold text-black rounded-lg text-xs font-semibold hover:opacity-90 transition disabled:opacity-50">
+            {loading ? "..." : "Send"}
+          </button>
+        </div>
+        {messages.length > 0 && (
+          <button onClick={() => setMessages([])} className="text-[10px] text-flyfx-muted hover:text-white mt-1.5 transition">
+            Clear conversation
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── MAIN APP ────────────────────────────────────────────────
 export default function Home() {
   const [authed, setAuthed] = useState(false);
@@ -1254,7 +1803,7 @@ export default function Home() {
   const [searchFilter, setSearchFilter] = useState("");
   const [statuses, setStatuses] = useState<Record<string, DealStatus>>({});
   const [importingKey, setImportingKey] = useState<string | null>(null);
-  const [appTab, setAppTab] = useState<"daily" | "live">("daily");
+  const [appTab, setAppTab] = useState<"daily" | "live" | "coach" | "agent">("daily");
 
   // Check session auth
   useEffect(() => {
@@ -1456,14 +2005,17 @@ export default function Home() {
           <div className="flex items-center gap-2">
             {/* Tab switcher */}
             <div className="flex items-center gap-0.5 bg-flyfx-card rounded-lg p-0.5 border border-flyfx-border">
-              <button onClick={() => setAppTab("daily")}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${appTab === "daily" ? "bg-flyfx-gold text-black" : "text-flyfx-muted hover:text-white"}`}>
-                Daily
-              </button>
-              <button onClick={() => setAppTab("live")}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${appTab === "live" ? "bg-flyfx-gold text-black" : "text-flyfx-muted hover:text-white"}`}>
-                Live Search
-              </button>
+              {([
+                { key: "daily" as const, label: "Daily" },
+                { key: "live" as const, label: "Search" },
+                { key: "coach" as const, label: "Coach" },
+                { key: "agent" as const, label: "Agent" },
+              ]).map((t) => (
+                <button key={t.key} onClick={() => setAppTab(t.key)}
+                  className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition ${appTab === t.key ? "bg-flyfx-gold text-black" : "text-flyfx-muted hover:text-white"}`}>
+                  {t.label}
+                </button>
+              ))}
             </div>
             {appTab === "daily" && (
               <>
@@ -1487,7 +2039,11 @@ export default function Home() {
       </header>
 
       <main className="max-w-2xl mx-auto px-4 py-4 space-y-4">
-        {appTab === "live" ? (
+        {appTab === "agent" ? (
+          <AgentView data={data} />
+        ) : appTab === "coach" ? (
+          <CoachView deals={data?.deals} />
+        ) : appTab === "live" ? (
           <LiveSearchView />
         ) : !data ? (
           /* Empty state */

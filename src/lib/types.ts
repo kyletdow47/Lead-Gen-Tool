@@ -76,3 +76,28 @@ export interface DailyData {
   scriptIntelligence: ScriptIntelligence;
   deals: Deal[];
 }
+
+// Coach types
+export interface CoachBrief {
+  readiness: "ready" | "needs_prep" | "skip";
+  confidenceNote: string;
+  approach: string;
+  openingLine: string;
+  keyTalkingPoints: string[];
+  likelyObjections: { objection: string; response: string }[];
+  whatNotToSay: string[];
+  scoreExplanation: string;
+  nextStep: string;
+  practiceScenario: string;
+}
+
+export interface PracticeMessage {
+  role: "kyle" | "prospect" | "coach";
+  text: string;
+}
+
+// Agent types
+export interface AgentMessage {
+  role: "user" | "assistant";
+  content: string;
+}
