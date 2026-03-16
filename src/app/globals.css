@@ -1,0 +1,41 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --gold: #D2AA44;
+  --dark: #0A0A0A;
+  --card: #141414;
+  --border: #1E1E1E;
+}
+
+body {
+  background: var(--dark);
+  color: #EEEEEE;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Card swipe animation */
+.card-enter {
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.priority-hot { border-left: 3px solid #FF4444; }
+.priority-warm { border-left: 3px solid #FF9900; }
+.priority-nurture { border-left: 3px solid #666666; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--dark); }
+::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+
+/* Mobile touch improvements */
+@media (max-width: 768px) {
+  .deal-card { touch-action: pan-y; }
+}
