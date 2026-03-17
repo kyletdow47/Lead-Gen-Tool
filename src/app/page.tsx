@@ -591,99 +591,69 @@ function DealCard({
       )}
 
       {/* Status action bar — always visible at bottom */}
-      <div
-        className="border-t border-flyfx-border px-4 py-2"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {status === "new" && (
-          <div className="flex items-center gap-2 w-full">
-            <span className="text-[10px] text-flyfx-muted mr-auto">Done calling?</span>
+      <div className="border-t border-flyfx-border px-3 py-2" onClick={(e) => e.stopPropagation()}>
+        {(status === "new" || status === "called") ? (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {/* Called toggle */}
             <button
-              onClick={() => onStatusChange("called")}
-              className="flex items-center gap-1 px-3 py-1.5 bg-flyfx-gold/10 text-flyfx-gold text-xs font-medium rounded-lg hover:bg-flyfx-gold/20 transition border border-flyfx-gold/20"
+              onClick={() => onStatusChange(status === "called" ? "new" : "called")}
+              className={`flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold rounded-lg border transition ${
+                status === "called"
+                  ? "bg-flyfx-gold/20 border-flyfx-gold text-flyfx-gold"
+                  : "border-flyfx-border text-flyfx-muted hover:text-white hover:border-white/30"
+              }`}
             >
-              <CheckIcon /> Called
+              <CheckIcon /> {status === "called" ? "Called ✓" : "Called?"}
+            </button>
+            <div className="w-px h-4 bg-flyfx-border mx-0.5" />
+            {/* Outcome tags */}
+            <button
+              onClick={() => { onStatusChange("they_callback"); }}
+              className="flex items-center gap-1 px-2.5 py-1 text-[11px] rounded-lg border border-blue-500/30 text-blue-400 hover:bg-blue-500/10 transition"
+            >
+              <IncomingIcon /> Good
+            </button>
+            <button
+              onClick={() => onStatusChange("callback_later")}
+              className="flex items-center gap-1 px-2.5 py-1 text-[11px] rounded-lg border border-amber-500/30 text-amber-400 hover:bg-amber-500/10 transition"
+            >
+              <ClockIcon /> Call Back
+            </button>
+            <button
+              onClick={onHubSpotImport}
+              disabled={importing}
+              className="flex items-center gap-1 px-2.5 py-1 text-[11px] rounded-lg border border-green-500/30 text-green-400 hover:bg-green-500/10 transition disabled:opacity-50"
+            >
+              <HubSpotIcon /> {importing ? "..." : "HubSpot"}
+            </button>
+            <button
+              onClick={() => onStatusChange("deleted")}
+              className="flex items-center gap-1 px-2.5 py-1 text-[11px] rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10 transition"
+            >
+              <TrashIcon /> Bad
             </button>
           </div>
-        )}
-
-        {status === "called" && (
-          <div className="space-y-2">
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-flyfx-gold/20 text-flyfx-gold font-medium">CALLED</span>
-              <span className="text-[10px] text-flyfx-muted">How did it go?</span>
-            </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <button
-                onClick={onHubSpotImport}
-                disabled={importing}
-                className="flex items-center gap-1 px-3 py-1.5 bg-green-500/10 text-green-400 text-xs font-medium rounded-lg hover:bg-green-500/20 transition border border-green-500/20 disabled:opacity-50"
-              >
-                <HubSpotIcon /> {importing ? "Importing..." : "Import to HubSpot"}
-              </button>
-              <button
-                onClick={() => onStatusChange("callback_later")}
-                className="flex items-center gap-1 px-3 py-1.5 bg-amber-500/10 text-amber-400 text-xs font-medium rounded-lg hover:bg-amber-500/20 transition border border-amber-500/20"
-              >
-                <ClockIcon /> Call Back Later
-              </button>
-              <button
-                onClick={() => onStatusChange("they_callback")}
-                className="flex items-center gap-1 px-3 py-1.5 bg-blue-500/10 text-blue-400 text-xs font-medium rounded-lg hover:bg-blue-500/20 transition border border-blue-500/20"
-              >
-                <IncomingIcon /> They'll Call Us
-              </button>
-              <button
-                onClick={() => onStatusChange("deleted")}
-                className="flex items-center gap-1 px-3 py-1.5 bg-red-500/10 text-red-400 text-xs font-medium rounded-lg hover:bg-red-500/20 transition border border-red-500/20"
-              >
-                <TrashIcon /> Delete
-              </button>
-            </div>
+        ) : status === "imported" ? (
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-500/20 text-green-400 font-medium">IN HUBSPOT</span>
+            <button onClick={() => onStatusChange("new")} className="ml-auto text-[10px] text-flyfx-muted hover:text-white transition">Reset</button>
           </div>
-        )}
-
-        {status === "imported" && (
-          <div className="flex items-center gap-2 w-full">
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-500/20 text-green-400 font-medium">IMPORTED TO HUBSPOT</span>
-          </div>
-        )}
-
-        {status === "callback_later" && (
-          <div className="flex items-center gap-2 w-full">
+        ) : status === "callback_later" ? (
+          <div className="flex items-center gap-2">
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 font-medium">CALL BACK LATER</span>
-            <button
-              onClick={() => onStatusChange("called")}
-              className="ml-auto flex items-center gap-1 px-2 py-1 text-[10px] text-flyfx-muted hover:text-white transition"
-            >
-              Change
-            </button>
+            <button onClick={() => onStatusChange("new")} className="ml-auto text-[10px] text-flyfx-muted hover:text-white transition">Reset</button>
           </div>
-        )}
-
-        {status === "they_callback" && (
-          <div className="flex items-center gap-2 w-full">
+        ) : status === "they_callback" ? (
+          <div className="flex items-center gap-2">
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 font-medium">THEY'LL CALL US</span>
-            <button
-              onClick={() => onStatusChange("called")}
-              className="ml-auto flex items-center gap-1 px-2 py-1 text-[10px] text-flyfx-muted hover:text-white transition"
-            >
-              Change
-            </button>
+            <button onClick={() => onStatusChange("new")} className="ml-auto text-[10px] text-flyfx-muted hover:text-white transition">Reset</button>
           </div>
-        )}
-
-        {status === "deleted" && (
-          <div className="flex items-center gap-2 w-full">
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 font-medium">DELETED</span>
-            <button
-              onClick={() => onStatusChange("new")}
-              className="ml-auto flex items-center gap-1 px-2 py-1 text-[10px] text-flyfx-muted hover:text-white transition"
-            >
-              Restore
-            </button>
+        ) : status === "deleted" ? (
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 font-medium">BAD / DELETED</span>
+            <button onClick={() => onStatusChange("new")} className="ml-auto text-[10px] text-flyfx-muted hover:text-white transition">Restore</button>
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );
@@ -736,21 +706,6 @@ function UploadIcon() {
   );
 }
 
-function ThumbsUpIcon() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-      <path d="M7 22V11M2 13v7a2 2 0 002 2h12.4a2 2 0 002-1.6l1.2-8A2 2 0 0017.6 10H14V5a3 3 0 00-3-3l-4 9v11" />
-    </svg>
-  );
-}
-
-function ThumbsDownIcon() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-      <path d="M17 2v11M22 11V4a2 2 0 00-2-2H7.6a2 2 0 00-2 1.6l-1.2 8A2 2 0 006.4 14H10v5a3 3 0 003 3l4-9V2" />
-    </svg>
-  );
-}
 
 function CheckIcon() {
   return (
@@ -2421,7 +2376,7 @@ export default function Home() {
 
     if (filter === "call" && !d.phone) return false;
     if (filter === "email" && d.phone) return false;
-    if (personFilter !== "all" && d.assignedTo !== personFilter && d.assignedTo !== "shared") return false;
+    if (personFilter !== "all" && d.assignedTo !== personFilter) return false;
     if (searchFilter) {
       const q = searchFilter.toLowerCase();
       return (
@@ -2435,18 +2390,25 @@ export default function Home() {
     return true;
   });
 
+  const statusMatch = (d: Deal) => {
+    const s = getDealStatus(d);
+    if (statusFilter === "to_call") return s === "new";
+    if (statusFilter === "called") return s === "called";
+    if (statusFilter === "callback") return s === "callback_later" || s === "they_callback";
+    if (statusFilter === "imported") return s === "imported";
+    if (statusFilter === "deleted") return s === "deleted";
+    return true;
+  };
+  const activeDeals = data?.deals.filter(statusMatch) ?? [];
   const toCallCount = data?.deals.filter((d) => getDealStatus(d) === "new").length ?? 0;
   const calledCount = data?.deals.filter((d) => getDealStatus(d) === "called").length ?? 0;
-  const callbackCount = data?.deals.filter((d) => {
-    const s = getDealStatus(d);
-    return s === "callback_later" || s === "they_callback";
-  }).length ?? 0;
+  const callbackCount = data?.deals.filter((d) => { const s = getDealStatus(d); return s === "callback_later" || s === "they_callback"; }).length ?? 0;
   const importedCount = data?.deals.filter((d) => getDealStatus(d) === "imported").length ?? 0;
   const deletedCount = data?.deals.filter((d) => getDealStatus(d) === "deleted").length ?? 0;
-  const callCount = data?.deals.filter((d) => d.phone).length ?? 0;
-  const emailCount = data?.deals.filter((d) => !d.phone && d.email).length ?? 0;
-  const kyleCount = data?.deals.filter((d) => d.assignedTo === "kyle").length ?? 0;
-  const gusCount = data?.deals.filter((d) => d.assignedTo === "gus").length ?? 0;
+  const callCount = activeDeals.filter((d) => d.phone).length;
+  const emailCount = activeDeals.filter((d) => !d.phone && d.email).length;
+  const kyleCount = activeDeals.filter((d) => d.assignedTo === "kyle").length;
+  const gusCount = activeDeals.filter((d) => d.assignedTo === "gus").length;
 
   return (
     <div className="min-h-screen bg-flyfx-dark pb-20">
@@ -2458,50 +2420,66 @@ export default function Home() {
       )}
 
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-flyfx-dark/95 backdrop-blur border-b border-flyfx-border px-4 py-3">
-        <div className="max-w-2xl mx-auto flex items-center justify-between">
+      <header className="sticky top-0 z-50 bg-flyfx-dark/95 backdrop-blur border-b border-flyfx-border">
+        {/* Row 1: logo + actions */}
+        <div className="max-w-2xl mx-auto flex items-center justify-between px-4 pt-2.5 pb-2">
           <div className="flex items-center gap-2">
             <img src="/flyfxfreight-logo.svg" alt="FlyFXFreight" className="h-5" />
-            <span className="text-flyfx-muted font-normal text-sm">Deals Machine</span>
-          </div>
-          <div className="flex items-center gap-2">
-            {/* Tab switcher */}
-            <div className="flex items-center gap-0.5 bg-flyfx-card rounded-lg p-0.5 border border-flyfx-border">
-              {([
-                { key: "pipeline" as const, label: "Run" },
-                { key: "daily" as const, label: "Daily" },
-                { key: "live" as const, label: "Search" },
-                { key: "coach" as const, label: "Coach" },
-                { key: "agent" as const, label: "Agent" },
-                { key: "granola" as const, label: "Calls" },
-              ]).map((t) => (
-                <button key={t.key} onClick={() => setAppTab(t.key)}
-                  className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition ${
-                    appTab === t.key
-                      ? t.key === "pipeline" ? "bg-flyfx-gold text-black" : "bg-flyfx-gold text-black"
-                      : "text-flyfx-muted hover:text-white"
-                  }`}>
-                  {t.label}
-                </button>
-              ))}
-            </div>
-            {appTab === "daily" && (
-              <>
-                <label className="cursor-pointer flex items-center gap-1.5 px-3 py-1.5 bg-flyfx-border rounded-lg hover:bg-white/10 transition text-xs">
-                  <UploadIcon />
-                  <span className="hidden sm:inline">Upload JSON</span>
-                  <input type="file" accept=".json" onChange={handleUpload} className="hidden" />
-                </label>
-                <button
-                  onClick={fetchDaily}
-                  disabled={loading}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-flyfx-gold text-black rounded-lg hover:opacity-90 transition text-xs font-medium disabled:opacity-50"
-                >
-                  <RefreshIcon />
-                  {loading ? "Loading..." : "Refresh"}
-                </button>
-              </>
+            <span className="text-flyfx-muted text-xs hidden sm:inline">Deals Machine</span>
+            {data && (
+              <span className="text-[10px] text-flyfx-muted border border-flyfx-border rounded px-1.5 py-0.5 hidden sm:inline">
+                {data.date}
+              </span>
             )}
+          </div>
+          <div className="flex items-center gap-1.5">
+            {/* Run pipeline — always visible */}
+            <button
+              onClick={() => setAppTab("pipeline")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+                appTab === "pipeline"
+                  ? "bg-flyfx-gold text-black"
+                  : "bg-flyfx-gold/15 border border-flyfx-gold/40 text-flyfx-gold hover:bg-flyfx-gold/25"
+              }`}
+            >
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+              Run
+            </button>
+            {/* Upload JSON */}
+            <label className="cursor-pointer flex items-center justify-center w-7 h-7 bg-flyfx-card border border-flyfx-border rounded-lg hover:bg-white/10 transition" title="Upload JSON">
+              <UploadIcon />
+              <input type="file" accept=".json" onChange={handleUpload} className="hidden" />
+            </label>
+            {/* Refresh */}
+            <button
+              onClick={fetchDaily}
+              disabled={loading}
+              title="Refresh deals"
+              className="flex items-center justify-center w-7 h-7 bg-flyfx-card border border-flyfx-border rounded-lg hover:bg-white/10 transition disabled:opacity-40"
+            >
+              <RefreshIcon />
+            </button>
+          </div>
+        </div>
+        {/* Row 2: tab nav */}
+        <div className="max-w-2xl mx-auto px-4 pb-0">
+          <div className="flex items-center gap-0.5">
+            {([
+              { key: "daily" as const, label: "Daily" },
+              { key: "live" as const, label: "Search" },
+              { key: "coach" as const, label: "Coach" },
+              { key: "agent" as const, label: "Agent" },
+              { key: "granola" as const, label: "Calls" },
+            ]).map((t) => (
+              <button key={t.key} onClick={() => setAppTab(t.key)}
+                className={`px-4 py-2 text-xs font-medium border-b-2 transition ${
+                  appTab === t.key
+                    ? "border-flyfx-gold text-flyfx-gold"
+                    : "border-transparent text-flyfx-muted hover:text-white"
+                }`}>
+                {t.label}
+              </button>
+            ))}
           </div>
         </div>
       </header>
