@@ -1,0 +1,38 @@
+{
+  "doNotCall": [
+    {
+      "company": "PML Seafrigo",
+      "domain": "pml-ltd.com",
+      "contactTried": "Martin Spraggs",
+      "date": "2026-03-17",
+      "reason": "Rude on call — do not contact again",
+      "addedBy": "Kyle"
+    }
+  ],
+  "deadVerticals": [
+    {
+      "type": "Pure Ocean / Road / Groupage Operators",
+      "pattern": "We don't handle air freight at all",
+      "confirmed": true
+    },
+    {
+      "type": "Warehouse / Distribution Only",
+      "pattern": "We're a warehouse operator, we don't arrange transport",
+      "confirmed": true
+    }
+  ],
+  "suspectedDead": [
+    {
+      "type": "Very Large General Forwarders",
+      "threshold": "500+ staff with no specialist division",
+      "pattern": "We have our own charter desk",
+      "rejections": 0
+    },
+    {
+      "type": "E-Commerce / Consumer Goods Logistics",
+      "pattern": "We don't use charters for our cargo types",
+      "rejections": 0
+    }
+  ],
+  "lastUpdated": "2026-03-17"
+}

@@ -11,6 +11,8 @@ export const PHONES_LOG = path.join(DATA_DIR, "phone_reveals.json");
 export const IMPORT_QUEUE_FILE = path.join(DATA_DIR, "import_queue.json");
 export const STATUSES_FILE = path.join(DATA_DIR, "statuses.json");
 export const MARKET_CACHE_FILE = path.join(DATA_DIR, "market_cache.json");
+export const MEMORY_FILE = path.join(DATA_DIR, "memory.json");
+export const GRANOLA_CACHE_FILE = path.join(DATA_DIR, "granola_cache.json");
 export { DATA_DIR };
 
 export async function ensureDir() {

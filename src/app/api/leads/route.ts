@@ -7,6 +7,8 @@ import { NextRequest, NextResponse } from "next/server";
 export const maxDuration = 60;
 
 const APOLLO_BASE = "https://api.apollo.io/api/v1";
+const HUBSPOT_API = "https://api.hubapi.com";
+const GUS_HUBSPOT_OWNER_ID = "79075901";
 
 // Excluded Tier 1 companies (freight mode) — from CLAUDE.md exclusion rules
 const EXCLUDED_FREIGHT = [
@@ -90,6 +92,112 @@ const PRIVATE_JET_PRESETS: Record<string, any> = {
     person_seniorities: ["director", "vp", "c_suite", "owner", "founder"],
   },
 };
+
+// Check HubSpot for existing contacts — returns owner ID if found, null if not
+async function checkHubSpot(email: string | null, firstName: string, lastName: string): Promise<{ exists: boolean; ownerId?: string; hubspotId?: string }> {
+  const hubspotKey = process.env.HUBSPOT_API_KEY;
+  if (!hubspotKey) return { exists: false };
+
+  // Search by email first (most reliable)
+  if (email) {
+    try {
+      const res = await fetch(`${HUBSPOT_API}/crm/v3/objects/contacts/search`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${hubspotKey}`,
+        },
+        body: JSON.stringify({
+          filterGroups: [{
+            filters: [{
+              propertyName: "email",
+              operator: "EQ",
+              value: email,
+            }],
+          }],
+          properties: ["email", "firstname", "lastname", "hubspot_owner_id"],
+          limit: 1,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.total > 0) {
+          const contact = data.results[0];
+          return {
+            exists: true,
+            ownerId: contact.properties?.hubspot_owner_id || undefined,
+            hubspotId: contact.id,
+          };
+        }
+      }
+    } catch {}
+  }
+
+  // Fallback: search by name
+  if (firstName && lastName) {
+    try {
+      const res = await fetch(`${HUBSPOT_API}/crm/v3/objects/contacts/search`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${hubspotKey}`,
+        },
+        body: JSON.stringify({
+          filterGroups: [{
+            filters: [
+              { propertyName: "firstname", operator: "EQ", value: firstName },
+              { propertyName: "lastname", operator: "EQ", value: lastName },
+            ],
+          }],
+          properties: ["email", "firstname", "lastname", "hubspot_owner_id"],
+          limit: 1,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.total > 0) {
+          const contact = data.results[0];
+          return {
+            exists: true,
+            ownerId: contact.properties?.hubspot_owner_id || undefined,
+            hubspotId: contact.id,
+          };
+        }
+      }
+    } catch {}
+  }
+
+  return { exists: false };
+}
+
+// Check HubSpot for a batch of leads, marking each with dedup info
+async function hubspotDedup(leads: any[]): Promise<any[]> {
+  const results = [];
+  // Process in batches of 5 to avoid rate limits
+  for (let i = 0; i < leads.length; i += 5) {
+    const batch = leads.slice(i, i + 5);
+    const checked = await Promise.all(
+      batch.map(async (lead: any) => {
+        const hs = await checkHubSpot(
+          lead.email,
+          lead.first_name || "",
+          lead.last_name || ""
+        );
+        return {
+          ...lead,
+          _hubspot: hs.exists ? {
+            exists: true,
+            ownerId: hs.ownerId,
+            hubspotId: hs.hubspotId,
+            isGusContact: hs.ownerId === GUS_HUBSPOT_OWNER_ID,
+          } : { exists: false },
+        };
+      })
+    );
+    results.push(...checked);
+  }
+  return results;
+}
 
 function isExcluded(orgName: string | undefined, mode: string): boolean {
   if (!orgName) return false;
@@ -225,8 +333,18 @@ export async function POST(request: NextRequest) {
     // Auto-enrich to get full contact details
     const enriched = await enrichLeads(filtered, apiKey, 5);
 
+    // HubSpot deduplication — check every contact against HubSpot
+    const deduped = await hubspotDedup(enriched);
+
+    // Filter out Gus's contacts (OFF LIMITS) and flag existing ones
+    const finalLeads = deduped.filter((p: any) => {
+      // Remove Gus's HubSpot contacts entirely
+      if (p._hubspot?.isGusContact) return false;
+      return true;
+    });
+
     // Sort: phone first, then email, then no contact
-    enriched.sort((a: any, b: any) => {
+    finalLeads.sort((a: any, b: any) => {
       const aPhone = !!(a.phone_numbers?.length || a.sanitized_phone);
       const bPhone = !!(b.phone_numbers?.length || b.sanitized_phone);
       const aEmail = !!a.email;
@@ -239,11 +357,12 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({
-      people: enriched,
+      people: finalLeads,
       total: data.total_entries || 0,
       page: searchParams.page,
       mode,
       vertical,
+      hubspotChecked: true,
     });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });

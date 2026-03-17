@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import type { DailyData, Deal, DealStatus, IntelSection, ConsequenceChain, CoachBrief, PracticeMessage, AgentMessage } from "@/lib/types";
+import type { DailyData, Deal, DealStatus, IntelSection, ConsequenceChain, CoachBrief, PracticeMessage, AgentMessage, PipelinePhase, PipelineResult } from "@/lib/types";
 
 // ─── AUTH GATE ───────────────────────────────────────────────
 function AuthGate({ onAuth }: { onAuth: () => void }) {
@@ -1625,6 +1625,468 @@ function CoachView({ deals }: { deals?: Deal[] }) {
   );
 }
 
+// ─── PIPELINE VIEW ───────────────────────────────────────────
+const PIPELINE_PHASES = [
+  { phase: 1, name: "Memory" },
+  { phase: 2, name: "Market Intelligence" },
+  { phase: 3, name: "Consequence Chains" },
+  { phase: 4, name: "Apollo Discovery" },
+  { phase: 5, name: "ICP Scoring" },
+  { phase: 6, name: "Apollo Enrichment" },
+  { phase: 7, name: "HubSpot Dedup" },
+  { phase: 8, name: "Kyle/Gus Split" },
+  { phase: 9, name: "Script Generation" },
+  { phase: 10, name: "Saving" },
+];
+
+function PipelineView({ onDealsLoaded }: { onDealsLoaded: (data: DailyData) => void }) {
+  const [running, setRunning] = useState(false);
+  const [phases, setPhases] = useState<PipelinePhase[]>(
+    PIPELINE_PHASES.map((p) => ({ ...p, status: "pending", message: "" }))
+  );
+  const [result, setResult] = useState<PipelineResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [lastRun, setLastRun] = useState<string | null>(null);
+
+  const updatePhase = (phaseNum: number, update: Partial<PipelinePhase>) => {
+    setPhases((prev) =>
+      prev.map((p) => (p.phase === phaseNum ? { ...p, ...update } : p))
+    );
+  };
+
+  const runPipeline = async () => {
+    setRunning(true);
+    setResult(null);
+    setError(null);
+    setPhases(PIPELINE_PHASES.map((p) => ({ ...p, status: "pending", message: "" })));
+
+    try {
+      const res = await fetch("/api/pipeline/run", { method: "POST" });
+      if (!res.ok || !res.body) {
+        setError("Pipeline failed to start");
+        setRunning(false);
+        return;
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split("\n\n");
+        buffer = parts.pop() || "";
+
+        for (const part of parts) {
+          const lines = part.trim().split("\n");
+          let eventType = "phase";
+          let dataStr = "";
+          for (const line of lines) {
+            if (line.startsWith("event: ")) eventType = line.slice(7).trim();
+            if (line.startsWith("data: ")) dataStr = line.slice(6).trim();
+          }
+          if (!dataStr) continue;
+          try {
+            const payload = JSON.parse(dataStr);
+            if (eventType === "phase") {
+              updatePhase(payload.phase, {
+                status: payload.status,
+                message: payload.message,
+                data: payload.data,
+              });
+            } else if (eventType === "complete") {
+              setResult(payload);
+              setLastRun(new Date().toLocaleTimeString());
+              // Reload daily data
+              try {
+                const dealsRes = await fetch("/api/deals");
+                if (dealsRes.ok) {
+                  const json = await dealsRes.json();
+                  if (json.data?.deals?.length > 0) {
+                    setTimeout(() => onDealsLoaded(json.data), 1500);
+                  }
+                }
+              } catch {}
+            } else if (eventType === "error") {
+              setError(payload.message);
+            }
+          } catch {}
+        }
+      }
+    } catch (e: any) {
+      setError(e.message || "Pipeline error");
+    }
+
+    setRunning(false);
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="bg-flyfx-card border border-flyfx-border rounded-xl p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h2 className="text-base font-semibold">Run Today's Pipeline</h2>
+            <p className="text-xs text-flyfx-muted mt-0.5">
+              Searches Apollo, scores 6 verticals, enriches top 35, deduplicates HubSpot, generates scripts. ~2–3 minutes.
+            </p>
+          </div>
+          {lastRun && (
+            <span className="text-[10px] text-flyfx-muted">Last run: {lastRun}</span>
+          )}
+        </div>
+
+        <button
+          onClick={runPipeline}
+          disabled={running}
+          className="w-full py-3.5 bg-flyfx-gold text-black font-bold rounded-xl hover:opacity-90 transition disabled:opacity-50 text-sm flex items-center justify-center gap-2"
+        >
+          {running ? (
+            <>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin flex-shrink-0">
+                <path d="M21 12a9 9 0 11-6.219-8.56" />
+              </svg>
+              Pipeline running...
+            </>
+          ) : (
+            <>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polygon points="5,3 19,12 5,21" />
+              </svg>
+              Run Today's Deals
+            </>
+          )}
+        </button>
+      </div>
+
+      {/* Error */}
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4">
+          <p className="text-xs text-red-400">{error}</p>
+        </div>
+      )}
+
+      {/* Result */}
+      {result && !running && (
+        <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-4 space-y-2">
+          <p className="text-sm font-semibold text-green-400">Pipeline complete</p>
+          <div className="grid grid-cols-4 gap-2">
+            {[
+              { l: "Deals", v: result.deals, c: "text-white" },
+              { l: "HOT", v: result.hot, c: "text-red-400" },
+              { l: "Kyle", v: result.kyle, c: "text-blue-400" },
+              { l: "Gus", v: result.gus, c: "text-purple-400" },
+            ].map((s) => (
+              <div key={s.l} className="bg-flyfx-dark rounded-lg p-2 text-center">
+                <p className={`text-lg font-bold ${s.c}`}>{s.v}</p>
+                <p className="text-[9px] text-flyfx-muted uppercase">{s.l}</p>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-green-400">Switching to Daily tab in a moment...</p>
+        </div>
+      )}
+
+      {/* Phase progress */}
+      {(running || phases.some((p) => p.status !== "pending")) && (
+        <div className="bg-flyfx-card border border-flyfx-border rounded-xl overflow-hidden">
+          <div className="px-4 py-2.5 border-b border-flyfx-border">
+            <p className="text-[10px] uppercase tracking-widest text-flyfx-muted font-semibold">Pipeline progress</p>
+          </div>
+          <div className="divide-y divide-flyfx-border">
+            {phases.map((p) => (
+              <div key={p.phase} className="flex items-center gap-3 px-4 py-2.5">
+                <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center">
+                  {p.status === "done" ? (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-green-400">
+                      <path d="M20 6L9 17l-5-5" />
+                    </svg>
+                  ) : p.status === "running" ? (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin text-flyfx-gold">
+                      <path d="M21 12a9 9 0 11-6.219-8.56" />
+                    </svg>
+                  ) : p.status === "error" ? (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-red-400">
+                      <circle cx="12" cy="12" r="10" /><path d="M12 8v4M12 16h.01" />
+                    </svg>
+                  ) : (
+                    <div className="w-2 h-2 rounded-full bg-flyfx-border" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs font-medium ${
+                      p.status === "done" ? "text-white" :
+                      p.status === "running" ? "text-flyfx-gold" :
+                      p.status === "error" ? "text-red-400" :
+                      "text-flyfx-muted"
+                    }`}>
+                      {p.name}
+                    </span>
+                    <span className="text-[10px] text-flyfx-muted truncate">{p.message}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* What it does — shown when idle */}
+      {!running && phases.every((p) => p.status === "pending") && (
+        <div className="bg-flyfx-card border border-flyfx-border rounded-xl p-4 space-y-3">
+          <p className="text-[10px] uppercase tracking-widest text-flyfx-muted font-semibold">What happens when you hit Run</p>
+          <div className="space-y-2">
+            {[
+              ["1", "Live market data", "Fetches Brent, TTF gas, Hormuz status from the web"],
+              ["2", "Crisis chains", "Claude traces today's events into charter demand chains"],
+              ["3", "Apollo search", "Searches 6 verticals across European logistics hubs"],
+              ["4", "ICP scoring", "Scores every contact across 6 dimensions (100 points)"],
+              ["5", "Enrichment", "Reveals phone numbers and verified emails for top 35"],
+              ["6", "HubSpot dedup", "Removes Gus's contacts and flags existing CRM entries"],
+              ["7", "Scripts", "Generates personalised opening lines and objection responses"],
+              ["8", "Save", "Writes today's deals to the app — available instantly on Daily tab"],
+            ].map(([n, title, desc]) => (
+              <div key={n} className="flex items-start gap-3">
+                <span className="text-[10px] w-4 h-4 rounded-full bg-flyfx-gold/20 text-flyfx-gold font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{n}</span>
+                <div>
+                  <p className="text-xs font-medium">{title}</p>
+                  <p className="text-[10px] text-flyfx-muted">{desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="text-[10px] text-flyfx-muted border-t border-flyfx-border pt-3">
+            Requires Vercel Pro plan for the 5-minute function timeout. Works locally without any plan restrictions.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── GRANOLA VIEW ────────────────────────────────────────────
+function GranolaView({ deals }: { deals?: Deal[] }) {
+  const [transcript, setTranscript] = useState("");
+  const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [analysis, setAnalysis] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [stats, setStats] = useState<any>(null);
+
+  useEffect(() => {
+    fetch("/api/granola")
+      .then((r) => r.json())
+      .then((d) => setStats(d))
+      .catch(() => {});
+  }, []);
+
+  const analyseTranscript = async () => {
+    if (!transcript.trim()) return;
+    setLoading(true);
+    setError(null);
+    setAnalysis(null);
+    try {
+      const res = await fetch("/api/granola", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          transcript,
+          dealContext: selectedDeal ? {
+            name: selectedDeal.name,
+            company: selectedDeal.company,
+            title: selectedDeal.title,
+          } : null,
+        }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setAnalysis(data.analysis);
+
+      // Auto-log outcome to memory
+      if (data.analysis?.outcome) {
+        await fetch("/api/memory", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "log_outcome",
+            contactName: data.analysis.contactName || selectedDeal?.name,
+            company: data.analysis.company || selectedDeal?.company,
+            outcome: data.analysis.outcome,
+            notes: data.analysis.outcomeDetail,
+            angle: data.analysis.angleWorked,
+          }),
+        });
+      }
+    } catch (e: any) {
+      setError(e.message);
+    }
+    setLoading(false);
+  };
+
+  const addToDnc = async (company: string, contactName: string, reason: string) => {
+    await fetch("/api/memory", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "add_dnc", company, contactName, reason }),
+    });
+  };
+
+  const outcomeBadge = (outcome: string) => {
+    const map: Record<string, string> = {
+      meeting_booked: "bg-green-500/20 text-green-400",
+      positive: "bg-green-500/20 text-green-400",
+      neutral: "bg-amber-500/20 text-amber-400",
+      rejection: "bg-red-500/20 text-red-400",
+      dead_vertical: "bg-red-500/20 text-red-400",
+      voicemail: "bg-gray-500/20 text-gray-400",
+      no_answer: "bg-gray-500/20 text-gray-400",
+    };
+    return map[outcome] || "bg-gray-500/20 text-gray-400";
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Stats row */}
+      {stats?.stats && (
+        <div className="grid grid-cols-4 gap-2">
+          {[
+            { l: "Calls", v: stats.stats.totalCalls, c: "text-white" },
+            { l: "Meetings", v: stats.stats.meetingsBooked, c: "text-green-400" },
+            { l: "Positive", v: stats.stats.positiveResponses, c: "text-flyfx-gold" },
+            { l: "Conv %", v: `${stats.stats.conversionRate}%`, c: "text-blue-400" },
+          ].map((s) => (
+            <div key={s.l} className="bg-flyfx-card border border-flyfx-border rounded-xl p-3 text-center">
+              <p className={`text-xl font-bold ${s.c}`}>{s.v}</p>
+              <p className="text-[9px] text-flyfx-muted uppercase tracking-wider mt-0.5">{s.l}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Transcript input */}
+      <div className="bg-flyfx-card border border-flyfx-border rounded-xl p-4 space-y-3">
+        <h2 className="text-sm font-semibold">Analyse a call transcript</h2>
+        <p className="text-xs text-flyfx-muted">Paste a transcript from Granola, Fireflies, or any notes. Claude extracts the outcome, updates memory, and gives coaching notes.</p>
+
+        {/* Optional: link to a deal */}
+        {deals && deals.length > 0 && (
+          <div>
+            <p className="text-[10px] text-flyfx-muted uppercase tracking-wider mb-1.5">Link to deal (optional)</p>
+            <div className="space-y-1 max-h-32 overflow-y-auto">
+              {deals.slice(0, 10).map((d) => (
+                <button key={d.rank} onClick={() => setSelectedDeal(selectedDeal?.rank === d.rank ? null : d)}
+                  className={`w-full text-left px-2.5 py-1.5 rounded-lg border text-xs transition ${selectedDeal?.rank === d.rank ? "border-flyfx-gold bg-flyfx-gold/10" : "border-flyfx-border hover:border-flyfx-gold/40"}`}>
+                  {d.name} — {d.company}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <textarea
+          value={transcript}
+          onChange={(e) => setTranscript(e.target.value)}
+          placeholder="Paste transcript or call notes here... (e.g. 'Called John Smith at ABC Logistics. He said they do handle air freight but have an existing broker at Chapman Freeborn. Willing to be a backup option. Will send email.')"
+          className="w-full h-32 px-3 py-2 bg-flyfx-dark border border-flyfx-border rounded-lg text-xs text-white outline-none focus:border-flyfx-gold transition resize-none"
+        />
+
+        <button onClick={analyseTranscript} disabled={loading || !transcript.trim()}
+          className="w-full py-2.5 bg-flyfx-gold text-black rounded-lg text-xs font-semibold hover:opacity-90 transition disabled:opacity-50">
+          {loading ? "Analysing..." : "Analyse call"}
+        </button>
+      </div>
+
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-xs text-red-400">{error}</div>
+      )}
+
+      {/* Analysis result */}
+      {analysis && (
+        <div className="bg-flyfx-card border border-flyfx-border rounded-xl overflow-hidden">
+          <div className="px-4 py-3 border-b border-flyfx-border flex items-center justify-between">
+            <h3 className="text-sm font-semibold">Call analysis</h3>
+            {analysis.outcome && (
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${outcomeBadge(analysis.outcome)}`}>
+                {analysis.outcome.replace("_", " ")}
+              </span>
+            )}
+          </div>
+          <div className="p-4 space-y-3">
+            {analysis.outcomeDetail && (
+              <div className="bg-flyfx-dark rounded-lg p-3 border border-flyfx-border">
+                <p className="text-xs leading-relaxed">{analysis.outcomeDetail}</p>
+              </div>
+            )}
+            {analysis.coachingNote && (
+              <div className="bg-flyfx-gold/10 border border-flyfx-gold/20 rounded-lg p-3">
+                <p className="text-[10px] text-flyfx-gold uppercase tracking-wider mb-1">Coach note</p>
+                <p className="text-xs leading-relaxed">{analysis.coachingNote}</p>
+              </div>
+            )}
+            {analysis.angleWorked && (
+              <div>
+                <p className="text-[10px] text-green-400 uppercase tracking-wider mb-1">What worked</p>
+                <p className="text-xs text-flyfx-muted">{analysis.angleWorked}</p>
+              </div>
+            )}
+            {analysis.angleFailure && (
+              <div>
+                <p className="text-[10px] text-red-400 uppercase tracking-wider mb-1">What didn't work</p>
+                <p className="text-xs text-flyfx-muted">{analysis.angleFailure}</p>
+              </div>
+            )}
+            {analysis.nextAction && analysis.nextAction !== "none" && (
+              <div className="bg-flyfx-dark rounded-lg p-3 border border-flyfx-border">
+                <p className="text-[10px] text-flyfx-muted uppercase tracking-wider mb-1">Next action</p>
+                <p className="text-xs font-semibold">{analysis.nextAction.replace("_", " ")}</p>
+                {analysis.callbackDate && <p className="text-xs text-flyfx-muted mt-0.5">Callback: {analysis.callbackDate}</p>}
+              </div>
+            )}
+            {/* Memory update buttons */}
+            {analysis.memoryUpdates?.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-[10px] text-flyfx-muted uppercase tracking-wider">Suggested memory updates</p>
+                {analysis.memoryUpdates.map((u: any, i: number) => (
+                  <div key={i} className="flex items-start gap-2 bg-flyfx-dark rounded-lg p-2.5 border border-flyfx-border">
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase flex-shrink-0 ${
+                      u.type === "add_dnc" ? "bg-red-500/20 text-red-400" :
+                      u.type === "winning_angle" ? "bg-green-500/20 text-green-400" :
+                      "bg-amber-500/20 text-amber-400"
+                    }`}>{u.type.replace("_", " ")}</span>
+                    <p className="text-xs text-flyfx-muted flex-1">{u.description}</p>
+                    {u.type === "add_dnc" && analysis.company && (
+                      <button onClick={() => addToDnc(analysis.company, analysis.contactName, analysis.outcomeDetail || "Flagged by Granola")}
+                        className="text-[10px] px-2 py-1 bg-red-500/20 text-red-400 rounded border border-red-500/20 hover:bg-red-500/30 transition flex-shrink-0">
+                        Add DNC
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Top angles */}
+      {stats?.topAngles?.length > 0 && (
+        <div className="bg-flyfx-card border border-flyfx-border rounded-xl p-4 space-y-2">
+          <p className="text-[10px] uppercase tracking-widest text-flyfx-muted font-semibold">Top working angles</p>
+          {stats.topAngles.map((a: any, i: number) => (
+            <div key={i} className="flex items-center gap-2">
+              <span className="text-[10px] font-bold text-flyfx-gold w-4">{a.count}×</span>
+              <p className="text-xs text-flyfx-muted">{a.angle}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── AGENT VIEW ─────────────────────────────────────────────
 function AgentView({ data }: { data?: DailyData | null }) {
   const [messages, setMessages] = useState<AgentMessage[]>([]);
@@ -1803,7 +2265,7 @@ export default function Home() {
   const [searchFilter, setSearchFilter] = useState("");
   const [statuses, setStatuses] = useState<Record<string, DealStatus>>({});
   const [importingKey, setImportingKey] = useState<string | null>(null);
-  const [appTab, setAppTab] = useState<"daily" | "live" | "coach" | "agent">("daily");
+  const [appTab, setAppTab] = useState<"daily" | "live" | "coach" | "agent" | "pipeline" | "granola">("daily");
 
   // Check session auth
   useEffect(() => {
@@ -2006,13 +2468,19 @@ export default function Home() {
             {/* Tab switcher */}
             <div className="flex items-center gap-0.5 bg-flyfx-card rounded-lg p-0.5 border border-flyfx-border">
               {([
+                { key: "pipeline" as const, label: "Run" },
                 { key: "daily" as const, label: "Daily" },
                 { key: "live" as const, label: "Search" },
                 { key: "coach" as const, label: "Coach" },
                 { key: "agent" as const, label: "Agent" },
+                { key: "granola" as const, label: "Calls" },
               ]).map((t) => (
                 <button key={t.key} onClick={() => setAppTab(t.key)}
-                  className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition ${appTab === t.key ? "bg-flyfx-gold text-black" : "text-flyfx-muted hover:text-white"}`}>
+                  className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition ${
+                    appTab === t.key
+                      ? t.key === "pipeline" ? "bg-flyfx-gold text-black" : "bg-flyfx-gold text-black"
+                      : "text-flyfx-muted hover:text-white"
+                  }`}>
                   {t.label}
                 </button>
               ))}
@@ -2039,7 +2507,11 @@ export default function Home() {
       </header>
 
       <main className="max-w-2xl mx-auto px-4 py-4 space-y-4">
-        {appTab === "agent" ? (
+        {appTab === "pipeline" ? (
+          <PipelineView onDealsLoaded={(d) => { setData(d); setTimeout(() => setAppTab("daily"), 500); }} />
+        ) : appTab === "granola" ? (
+          <GranolaView deals={data?.deals} />
+        ) : appTab === "agent" ? (
           <AgentView data={data} />
         ) : appTab === "coach" ? (
           <CoachView deals={data?.deals} />
@@ -2049,16 +2521,23 @@ export default function Home() {
           /* Empty state */
           <div className="text-center py-20 space-y-4">
             <div className="text-6xl opacity-20">📡</div>
-            <h2 className="text-xl font-semibold">No intelligence loaded</h2>
+            <h2 className="text-xl font-semibold">No deals loaded</h2>
             <p className="text-flyfx-muted text-sm max-w-md mx-auto">
-              Upload a daily JSON file, or wait for the automated pipeline to push data.
-              You can also run <code className="text-flyfx-gold">deals please</code> in Claude
-              to generate today's leads.
+              Hit <strong className="text-flyfx-gold">Run</strong> to generate today's leads automatically, or upload a deals JSON file.
             </p>
-            <label className="inline-flex items-center gap-2 px-4 py-2 bg-flyfx-gold text-black rounded-lg cursor-pointer hover:opacity-90 transition text-sm font-medium mt-4">
-              <UploadIcon /> Upload deals JSON
-              <input type="file" accept=".json" onChange={handleUpload} className="hidden" />
-            </label>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mt-4">
+              <button
+                onClick={() => setAppTab("pipeline")}
+                className="flex items-center gap-2 px-5 py-2.5 bg-flyfx-gold text-black rounded-lg hover:opacity-90 transition text-sm font-bold"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="5,3 19,12 5,21" /></svg>
+                Run Today's Pipeline
+              </button>
+              <label className="inline-flex items-center gap-2 px-4 py-2.5 bg-flyfx-border rounded-lg cursor-pointer hover:bg-white/10 transition text-sm">
+                <UploadIcon /> Upload JSON
+                <input type="file" accept=".json" onChange={handleUpload} className="hidden" />
+              </label>
+            </div>
           </div>
         ) : (
           <>

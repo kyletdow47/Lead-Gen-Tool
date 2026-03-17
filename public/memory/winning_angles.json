@@ -1,0 +1,65 @@
+{
+  "provenStructure": {
+    "steps": [
+      "Name + company first — 'Kyle/Gus from FlyFX'",
+      "Specialist positioning — 'air charter specialist', not 'broker'",
+      "Specific services — 'oversized, dangerous goods, time-critical'",
+      "Partnership frame — 'additional option, not replacement'",
+      "Credibility — '17 years experience' + 'faster turnarounds'"
+    ],
+    "why": "Positions FlyFX as a tool the forwarder can use, not a vendor selling to them"
+  },
+  "workingAngles": [
+    {
+      "angle": "Specialist alternative for better pricing",
+      "why": "Positions FlyFX as making the forwarder look good to their clients",
+      "bestFor": "General air freight, Gus territory",
+      "usage": "We often find forwarders a better rate than their usual charter contact, simply because we have a wider operator network.",
+      "conversions": 0
+    },
+    {
+      "angle": "Interested in making money together",
+      "why": "Partnership language — not buy from me but let's both profit",
+      "bestFor": "Experienced forwarders, Gus territory",
+      "usage": "Mid-call, when rapport is established",
+      "conversions": 0
+    },
+    {
+      "angle": "We work exclusively with freight forwarders",
+      "why": "Removes the #1 fear — broker stealing the client",
+      "bestFor": "Every call",
+      "usage": "First 30 seconds, every time",
+      "conversions": 0
+    },
+    {
+      "angle": "Crisis-specific talking point",
+      "why": "Demonstrates market knowledge, shows you read the same trade press",
+      "bestFor": "Kyle's calls — technical credibility",
+      "usage": "Always reference a specific development, not a general statement",
+      "conversions": 0
+    }
+  ],
+  "failingAngles": [
+    { "angle": "Direct sales pitch — 'would you like to use us?'", "reason": "Immediate rejection" },
+    { "angle": "Vague intro — 'Hi, I'm from an air charter company'", "reason": "Quick brush-off, no hook" },
+    { "angle": "Generic opener — 'Do you use charters?'", "reason": "Opens the door to 'no'" },
+    { "angle": "Pressure — 'special offer this week'", "reason": "Professionals dismiss it as amateur" }
+  ],
+  "differentiatorRanking": [
+    { "rank": 1, "differentiator": "Forwarder-exclusive model", "impact": "Removes trust barrier" },
+    { "rank": 2, "differentiator": "All 9 DG classes", "impact": "Technical moat — gets attention from specialists" },
+    { "rank": 3, "differentiator": "17 years experience", "impact": "Credibility anchor" },
+    { "rank": 4, "differentiator": "Neutral broker / wide network", "impact": "Positions as complementary" },
+    { "rank": 5, "differentiator": "24/7/365 response", "impact": "Time-critical verticals" },
+    { "rank": 6, "differentiator": "Business jet cargo", "impact": "Unusual cargo, remote airstrips" }
+  ],
+  "crisisAngles": {
+    "currentlyWorking": [
+      "Hormuz closure → energy logistics demand (energy forwarders respond to oil price references)",
+      "Gulf food imports → perishable charter demand (NL and Spain perishable forwarders)",
+      "Airline route cancellations → belly cargo loss (general forwarders respond to specific route names)"
+    ],
+    "notWorking": []
+  },
+  "lastUpdated": "2026-03-17"
+}

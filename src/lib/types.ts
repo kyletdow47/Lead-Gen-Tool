@@ -1,4 +1,23 @@
 export type DealStatus = "new" | "called" | "callback_later" | "they_callback" | "imported" | "deleted";
+export type CallOutcome = "meeting_booked" | "positive" | "neutral" | "rejection" | "dead_vertical" | "voicemail" | "no_answer";
+
+export interface PipelinePhase {
+  phase: number;
+  name: string;
+  status: "pending" | "running" | "done" | "error";
+  message: string;
+  data?: any;
+}
+
+export interface PipelineResult {
+  success: boolean;
+  deals: number;
+  date: string;
+  hot: number;
+  warm: number;
+  kyle: number;
+  gus: number;
+}
 
 export interface Deal {
   rank: number;
