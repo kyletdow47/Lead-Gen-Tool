@@ -2,40 +2,111 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Light mode (default) — earthy brown, warm gold tones */
 :root {
-  --gold: #D2AA44;
-  --dark: #0A0A0A;
+  --gold: #B8922E;
+  --bg: #DDD4C2;
+  --card: #E8DFCE;
+  --border: #C4B698;
+  --text: #1A1510;
+  --muted: #5C4E3C;
+  --subtle: #D4CAB6;
+}
+
+/* Dark mode */
+.dark {
+  --bg: #0A0A0A;
   --card: #141414;
   --border: #1E1E1E;
+  --text: #EEEEEE;
+  --muted: #888888;
+  --subtle: #1A1A1A;
 }
 
 body {
-  background: var(--dark);
-  color: #EEEEEE;
+  background: var(--bg);
+  color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
-/* Card swipe animation */
+/* ── Light mode: override hardcoded dark-theme Tailwind classes ── */
+:root .bg-flyfx-dark { background: var(--subtle) !important; }
+:root .bg-flyfx-card { background: var(--card) !important; }
+:root .border-flyfx-border { border-color: var(--border) !important; }
+:root .text-flyfx-muted { color: var(--muted) !important; }
+:root .text-flyfx-gold { color: #96780F !important; }
+:root .text-white { color: var(--text) !important; }
+:root .divide-flyfx-border > * + * { border-color: var(--border) !important; }
+:root .bg-flyfx-dark\/50 { background: color-mix(in srgb, var(--subtle) 60%, transparent) !important; }
+:root .bg-flyfx-gold\/10 { background: rgba(184, 146, 46, 0.12) !important; }
+:root .bg-flyfx-gold\/15 { background: rgba(184, 146, 46, 0.15) !important; }
+:root .bg-flyfx-gold\/20 { background: rgba(184, 146, 46, 0.20) !important; }
+:root .hover\:bg-white\/10:hover { background: rgba(0,0,0,0.04) !important; }
+:root .hover\:bg-white\/\[0\.02\]:hover { background: rgba(0,0,0,0.02) !important; }
+:root .bg-black\/30 { background: rgba(0,0,0,0.04) !important; }
+:root .bg-black\/20 { background: rgba(0,0,0,0.03) !important; }
+/* Make colored text darker in light mode for readability */
+:root .text-red-400 { color: #B91C1C !important; }
+:root .text-amber-400 { color: #92400E !important; }
+:root .text-green-400 { color: #166534 !important; }
+:root .text-blue-400 { color: #1E40AF !important; }
+:root .text-teal-400 { color: #115E59 !important; }
+:root .text-purple-400 { color: #6B21A8 !important; }
+:root .text-orange-400 { color: #9A3412 !important; }
+
+/* Dark mode: restore original Tailwind values */
+.dark .bg-flyfx-dark { background: #0A0A0A !important; }
+.dark .bg-flyfx-card { background: #141414 !important; }
+.dark .border-flyfx-border { border-color: #1E1E1E !important; }
+.dark .text-flyfx-muted { color: #888888 !important; }
+.dark .text-flyfx-gold { color: #D2AA44 !important; }
+.dark .text-white { color: #EEEEEE !important; }
+.dark .divide-flyfx-border > * + * { border-color: #1E1E1E !important; }
+.dark .bg-flyfx-dark\/50 { background: rgba(10, 10, 10, 0.5) !important; }
+.dark .bg-flyfx-gold\/10 { background: rgba(210, 170, 68, 0.1) !important; }
+.dark .bg-flyfx-gold\/15 { background: rgba(210, 170, 68, 0.15) !important; }
+.dark .bg-flyfx-gold\/20 { background: rgba(210, 170, 68, 0.2) !important; }
+.dark .hover\:bg-white\/10:hover { background: rgba(255,255,255,0.1) !important; }
+.dark .hover\:bg-white\/\[0\.02\]:hover { background: rgba(255,255,255,0.02) !important; }
+.dark .bg-black\/30 { background: rgba(0,0,0,0.3) !important; }
+.dark .bg-black\/20 { background: rgba(0,0,0,0.2) !important; }
+/* Restore light colored text for dark mode */
+.dark .text-red-400 { color: #F87171 !important; }
+.dark .text-amber-400 { color: #FBBF24 !important; }
+.dark .text-green-400 { color: #4ADE80 !important; }
+.dark .text-blue-400 { color: #60A5FA !important; }
+.dark .text-teal-400 { color: #2DD4BF !important; }
+.dark .text-purple-400 { color: #C084FC !important; }
+.dark .text-orange-400 { color: #FB923C !important; }
+
+/* Card animation */
 .card-enter {
-  animation: slideUp 0.3s ease-out;
+  animation: slideUp 0.25s ease-out;
 }
 
 @keyframes slideUp {
-  from { opacity: 0; transform: translateY(20px); }
+  from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
-.priority-hot { border-left: 3px solid #FF4444; }
-.priority-warm { border-left: 3px solid #FF9900; }
-.priority-nurture { border-left: 3px solid #666666; }
+/* Priority left border — gold for hot */
+.priority-hot { border-left: 3px solid #D2AA44; }
 
 /* Scrollbar */
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: var(--dark); }
-::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
-/* Mobile touch improvements */
+/* Theme-aware utilities */
+.theme-bg { background: var(--bg); }
+.theme-card { background: var(--card); }
+.theme-border { border-color: var(--border); }
+.theme-text { color: var(--text); }
+.theme-muted { color: var(--muted); }
+.theme-subtle { background: var(--subtle); }
+
+/* Mobile */
 @media (max-width: 768px) {
   .deal-card { touch-action: pan-y; }
 }

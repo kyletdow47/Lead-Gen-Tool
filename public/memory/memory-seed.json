@@ -1,0 +1,268 @@
+{
+  "_note": "Historical call outcome log seeded from Granola + HubSpot. Auto-loaded on first access.",
+  "_seededAt": "2026-03-17",
+  "doNotCall": [],
+  "callOutcomes": [
+    {
+      "contactName": "Maxime Heylen",
+      "company": "FAR International",
+      "outcome": "positive",
+      "notes": "Does 16 charters in 3 months — actively looking for competitive quotes. Very warm.",
+      "angle": "Charter frequency — competitive rates",
+      "date": "2026-03-17",
+      "addedBy": "Kyle"
+    },
+    {
+      "contactName": "Frederick",
+      "company": "Team Freight",
+      "outcome": "positive",
+      "notes": "Open to collaboration for difficult or unusual cases. Wants to stay in touch.",
+      "angle": "Difficult cases — charter as backup",
+      "date": "2026-03-17",
+      "addedBy": "Kyle"
+    },
+    {
+      "contactName": "M-O Hamster",
+      "company": "Alfons Köster",
+      "outcome": "neutral",
+      "notes": "Received the pitch. Requested brochure.",
+      "angle": "General intro",
+      "date": "2026-03-17",
+      "addedBy": "Kyle"
+    },
+    {
+      "contactName": "Gaston Mesias",
+      "company": "Pinnacle International Freight",
+      "outcome": "neutral",
+      "notes": "Added to HubSpot. Follow up needed.",
+      "angle": "General intro",
+      "date": "2026-03-17",
+      "addedBy": "Kyle"
+    },
+    {
+      "contactName": "Kerry Murray",
+      "company": "Freightport",
+      "outcome": "neutral",
+      "notes": "Received brochure. No immediate need.",
+      "angle": "General intro",
+      "date": "2026-03-16",
+      "addedBy": "Kyle"
+    },
+    {
+      "contactName": "Marcin Lupinski",
+      "company": "Robano",
+      "outcome": "neutral",
+      "notes": "Added to HubSpot. Follow up in Q2.",
+      "angle": "General intro",
+      "date": "2026-03-16",
+      "addedBy": "Kyle"
+    },
+    {
+      "contactName": "Henrik Mikkelsen",
+      "company": "Nord Carrier",
+      "outcome": "neutral",
+      "notes": "Received pitch. Air freight focus confirmed.",
+      "angle": "Air freight backup capacity",
+      "date": "2026-03-16",
+      "addedBy": "Kyle"
+    },
+    {
+      "contactName": "Gizem Oral",
+      "company": "Volantis Logistics",
+      "outcome": "neutral",
+      "notes": "Receptive. Requested email follow-up.",
+      "angle": "General intro",
+      "date": "2026-03-16",
+      "addedBy": "Kyle"
+    },
+    {
+      "contactName": "Helms",
+      "company": "TFF Logistics",
+      "outcome": "neutral",
+      "notes": "Added to HubSpot.",
+      "angle": "Air freight",
+      "date": "2026-03-16",
+      "addedBy": "Kyle"
+    },
+    {
+      "contactName": "Niek Van Dijl",
+      "company": "HST Groep",
+      "outcome": "neutral",
+      "notes": "Rotterdam-based. Added to HubSpot.",
+      "angle": "Rotterdam corridor",
+      "date": "2026-03-11",
+      "addedBy": "Kyle"
+    },
+    {
+      "contactName": "Mehmet Dereci",
+      "company": "ELS Logistics",
+      "outcome": "positive",
+      "notes": "Handles oversized and dangerous goods occasionally. Very relevant — good fit for DG capability angle.",
+      "angle": "DG / Oversized — all 9 UN classes",
+      "date": "2026-03-11",
+      "addedBy": "Kyle"
+    },
+    {
+      "contactName": "Jack Barr",
+      "company": "Eurogate Logistics Group",
+      "outcome": "neutral",
+      "notes": "Added to HubSpot.",
+      "angle": "Air freight backup",
+      "date": "2026-03-10",
+      "addedBy": "Kyle"
+    },
+    {
+      "contactName": "Jason Flower",
+      "company": "KWL Logistics Ltd",
+      "outcome": "neutral",
+      "notes": "MD level. Receptive. Added to HubSpot.",
+      "angle": "General intro to MD",
+      "date": "2026-03-10",
+      "addedBy": "Kyle"
+    },
+    {
+      "contactName": "Bert Rietveld",
+      "company": "Embassy Freight Rotterdam",
+      "outcome": "neutral",
+      "notes": "Rotterdam base — relevant for DG and project cargo corridor.",
+      "angle": "Rotterdam DG corridor",
+      "date": "2026-03-10",
+      "addedBy": "Kyle"
+    },
+    {
+      "contactName": "Nick Collins",
+      "company": "CTS Logistics",
+      "outcome": "neutral",
+      "notes": "MD level. Added to HubSpot.",
+      "angle": "General intro",
+      "date": "2026-03-10",
+      "addedBy": "Kyle"
+    },
+    {
+      "contactName": "Thomas Wolf",
+      "company": "TALOGIS Air & Sea GmbH",
+      "outcome": "neutral",
+      "notes": "Frankfurt-based. Air & sea freight focus.",
+      "angle": "Frankfurt hub — charter capacity",
+      "date": "2026-03-10",
+      "addedBy": "Kyle"
+    },
+    {
+      "contactName": "Jan Boklund",
+      "company": "NAC Air & Sea Cargo",
+      "outcome": "neutral",
+      "notes": "Nordic director. Added to HubSpot.",
+      "angle": "Nordic routes",
+      "date": "2026-03-06",
+      "addedBy": "Kyle"
+    },
+    {
+      "contactName": "Elin Mjornheim",
+      "company": "APC Logistics",
+      "outcome": "neutral",
+      "notes": "Stockholm-based. Receptive.",
+      "angle": "Scandinavia routes",
+      "date": "2026-03-06",
+      "addedBy": "Kyle"
+    },
+    {
+      "contactName": "Pawel Pawlikowski",
+      "company": "Polfrost",
+      "outcome": "positive",
+      "notes": "1–2 charters per year — perishables and cold chain. Portugal routes mentioned. Good fit.",
+      "angle": "Perishables cold chain — Portugal routes",
+      "date": "2026-03-05",
+      "addedBy": "Kyle"
+    },
+    {
+      "contactName": "Artur",
+      "company": "Air Trans",
+      "outcome": "positive",
+      "notes": "1–2 charters per year. Interested in Portugal routes specifically. Follow up with route examples.",
+      "angle": "Portugal routes — charter capacity",
+      "date": "2026-03-05",
+      "addedBy": "Kyle"
+    },
+    {
+      "contactName": "Sophie Nash",
+      "company": "Alpi UK",
+      "outcome": "neutral",
+      "notes": "Air exports manager. Receptive. Added to HubSpot.",
+      "angle": "UK exports — air freight",
+      "date": "2026-03-04",
+      "addedBy": "Kyle"
+    },
+    {
+      "contactName": "Kai Greve",
+      "company": "Cargo Next Logistics",
+      "outcome": "neutral",
+      "notes": "Oslo-based. Added to HubSpot.",
+      "angle": "Norwegian offshore / air freight",
+      "date": "2026-03-04",
+      "addedBy": "Kyle"
+    },
+    {
+      "contactName": "Sean",
+      "company": "Barrington Freight",
+      "outcome": "neutral",
+      "notes": "Added to HubSpot.",
+      "angle": "General intro",
+      "date": "2026-03-04",
+      "addedBy": "Kyle"
+    },
+    {
+      "contactName": "Bart",
+      "company": "Logicall",
+      "outcome": "neutral",
+      "notes": "Belgium-based. Added to HubSpot.",
+      "angle": "Benelux corridor",
+      "date": "2026-03-04",
+      "addedBy": "Kyle"
+    },
+    {
+      "contactName": "Jesse",
+      "company": "Rule Wave",
+      "outcome": "positive",
+      "notes": "Oil & gas specialist. Knows Gustavo — needs warm intro from Gus. Very strong fit.",
+      "angle": "Oil & gas — energy logistics",
+      "date": "2026-03-11",
+      "addedBy": "Kyle"
+    },
+    {
+      "contactName": "Daniel",
+      "company": "Spedman",
+      "outcome": "positive",
+      "notes": "DG specialist for government and defence. Exactly the profile for our Class 1/7 capability.",
+      "angle": "DG — government / defence",
+      "date": "2026-03-13",
+      "addedBy": "Kyle"
+    },
+    {
+      "contactName": "Elton",
+      "company": "MX Express",
+      "outcome": "positive",
+      "notes": "Monthly charter frequency — high value target. Wants competitive quotes to benchmark current broker.",
+      "angle": "Charter frequency — competitive rates",
+      "date": "2026-03-14",
+      "addedBy": "Kyle"
+    },
+    {
+      "contactName": "Ruud",
+      "company": "ABC Freight",
+      "outcome": "neutral",
+      "notes": "Open for future. Cost-sensitive — lead with pricing angle next touch.",
+      "angle": "Cost-competitive charter",
+      "date": "2026-03-12",
+      "addedBy": "Kyle"
+    },
+    {
+      "contactName": "Martin Spraggs",
+      "company": "PML Seafrigo",
+      "outcome": "dead_vertical",
+      "notes": "Rude on call. Self-sufficient — handle own charters. Do not contact again.",
+      "angle": null,
+      "date": "2026-03-17",
+      "addedBy": "Kyle"
+    }
+  ]
+}

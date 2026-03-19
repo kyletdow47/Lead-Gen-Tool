@@ -9,14 +9,27 @@ import { promises as fs } from "fs";
 const MEMORY_FILE = path.join(DATA_DIR, "memory.json");
 const PUBLIC_DEAD = path.join(process.cwd(), "public", "memory", "dead_companies.json");
 const PUBLIC_ANGLES = path.join(process.cwd(), "public", "memory", "winning_angles.json");
+const MEMORY_SEED_FILE = path.join(process.cwd(), "public", "memory", "memory-seed.json");
 
 async function loadMemory() {
   // Load static public memory (bundled, survives cold starts)
-  const [deadStatic, anglesStatic, overrides] = await Promise.all([
+  let [deadStatic, anglesStatic, overrides] = await Promise.all([
     readJSON(PUBLIC_DEAD),
     readJSON(PUBLIC_ANGLES),
     readJSON(MEMORY_FILE),
   ]);
+
+  // Seed runtime memory from static file on first access (cold start)
+  if (!overrides || (!overrides.callOutcomes?.length && !overrides.doNotCall?.length)) {
+    try {
+      const seed = await readJSON(MEMORY_SEED_FILE);
+      if (seed && (seed.callOutcomes?.length || seed.doNotCall?.length)) {
+        const { _note, _seededAt, ...seedData } = seed;
+        overrides = { ...seedData };
+        await writeJSON(MEMORY_FILE, overrides);
+      }
+    } catch {}
+  }
 
   const dead = deadStatic || { doNotCall: [], deadVerticals: [], suspectedDead: [] };
   const angles = anglesStatic || { workingAngles: [], failingAngles: [] };

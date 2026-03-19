@@ -158,20 +158,33 @@ function MarketPanel({ data }: { data: DailyData }) {
 }
 
 function SnapshotTab({ m, headlines }: { m: DailyData["marketSnapshot"]; headlines?: string[] }) {
-  const extraKeys = Object.keys(m).filter(
-    (k) => !["brent", "ttfGas", "hormuzStatus", "topTalkingPoint", "keyHeadlines", "fetchedAt"].includes(k)
-  );
+  // 10 charter-focused data points for call prep
+  const metrics: Array<{ label: string; value: string; icon: string; color: string }> = [
+    { label: "Air Cargo Capacity", value: m.airCargoCapacity || "~18% offline from Gulf hub disruptions", icon: "!", color: "text-red-400" },
+    { label: "Charter Demand", value: m.charterDemand || "HIGH — forwarders seeking alternatives", icon: "^", color: (m.charterDemand || "HIGH").includes("HIGH") ? "text-red-400" : "text-amber-400" },
+    { label: "Gulf Hubs", value: m.gulfHubStatus || "Emirates ~50% · Qatar suspended · Etihad limited", icon: "~", color: "text-amber-400" },
+    { label: "Hormuz Strait", value: m.hormuzStatus || "Check latest status", icon: "X", color: (m.hormuzStatus || "").toLowerCase().includes("closed") ? "text-red-400" : "text-amber-400" },
+    { label: "Brent Crude", value: m.brent || "Check oilprice.com", icon: "$", color: "text-white" },
+    { label: "Jet Fuel", value: m.jetFuel || "Elevated — airline cost pressure rising", icon: "$", color: "text-white" },
+    { label: "Air Freight Rates", value: m.airFreightRates || "Asia-Europe +16-65% · rates surging", icon: "^", color: "text-red-400" },
+    { label: "Airline Disruptions", value: m.airlineDisruptions || "Gulf airspace closures · route suspensions", icon: "!", color: "text-amber-400" },
+    { label: "Suez / Red Sea", value: m.suezStatus || "Container lines rerouting via Cape +10-14 days", icon: "~", color: "text-amber-400" },
+    { label: "Crisis Angle", value: m.crisisAngle || m.topTalkingPoint?.split(".")[0] || "Gulf disruption — charter alternatives needed", icon: "*", color: "text-flyfx-gold" },
+  ];
 
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Stat label="Brent" value={m.brent} />
-        <Stat label="TTF Gas" value={m.ttfGas} />
-        <Stat label="Hormuz" value={m.hormuzStatus} />
-        {extraKeys.slice(0, 5).map((k) => (
-          <Stat key={k} label={k.replace(/([A-Z])/g, " $1").trim()} value={m[k]} />
+      {/* Metrics as bullet-point list — clean and scannable */}
+      <div className="bg-flyfx-dark rounded-lg border border-flyfx-border divide-y divide-flyfx-border">
+        {metrics.map((metric) => (
+          <div key={metric.label} className="flex items-start gap-3 px-3 py-2.5">
+            <span className="text-[10px] text-flyfx-muted uppercase tracking-wider w-28 flex-shrink-0 pt-0.5">{metric.label}</span>
+            <span className={`text-xs leading-relaxed ${metric.color}`}>{metric.value}</span>
+          </div>
         ))}
       </div>
+
+      {/* Top talking point */}
       {m.topTalkingPoint && (
         <div className="bg-flyfx-dark rounded-lg p-3 border border-flyfx-gold/20">
           <p className="text-[10px] text-flyfx-gold uppercase tracking-wider mb-1">
@@ -180,6 +193,8 @@ function SnapshotTab({ m, headlines }: { m: DailyData["marketSnapshot"]; headlin
           <p className="text-sm leading-relaxed">{m.topTalkingPoint}</p>
         </div>
       )}
+
+      {/* Headlines */}
       {headlines && headlines.length > 0 && (
         <div className="space-y-1.5">
           <p className="text-[10px] text-flyfx-muted uppercase tracking-wider">Key headlines</p>
@@ -369,31 +384,125 @@ function ChevronIcon({ open }: { open: boolean }) {
 
 // ─── SCRIPT INTELLIGENCE ─────────────────────────────────────
 function ScriptIntel({ data }: { data: DailyData["scriptIntelligence"] }) {
-  if (!data) return null;
-  return (
-    <div className="bg-flyfx-card border border-flyfx-border rounded-xl p-4 space-y-3">
-      <h2 className="text-sm font-semibold text-flyfx-gold uppercase tracking-wider">
-        Script Intelligence
-      </h2>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-        <div className="bg-flyfx-dark rounded-lg p-3">
-          <p className="text-[10px] text-flyfx-muted uppercase mb-1">Calls Analysed</p>
-          <p className="font-semibold">{data.callsAnalysed}</p>
-        </div>
-        <div className="bg-flyfx-dark rounded-lg p-3">
-          <p className="text-[10px] text-flyfx-muted uppercase mb-1">Top Opener</p>
-          <p className="text-xs leading-relaxed">{data.topOpener}</p>
-        </div>
-        <div className="bg-flyfx-dark rounded-lg p-3">
-          <p className="text-[10px] text-flyfx-muted uppercase mb-1">Common Objection</p>
-          <p className="text-xs leading-relaxed">{data.commonObjection}</p>
-        </div>
+  const [openSection, setOpenSection] = useState<string | null>("openers");
+
+  const toggle = (id: string) => setOpenSection(openSection === id ? null : id);
+
+  function Section({ id, title, color, children }: { id: string; title: string; color: string; children: React.ReactNode }) {
+    const isOpen = openSection === id;
+    return (
+      <div className="border border-flyfx-border rounded-lg overflow-hidden">
+        <button
+          onClick={() => toggle(id)}
+          className="w-full flex items-center justify-between px-3 py-2.5 bg-flyfx-dark hover:bg-white/5 transition text-left"
+        >
+          <span className={`text-xs font-semibold ${color}`}>{title}</span>
+          <span className="text-flyfx-muted text-xs">{isOpen ? "−" : "+"}</span>
+        </button>
+        {isOpen && <div className="px-3 py-3 space-y-3 bg-flyfx-card/50">{children}</div>}
       </div>
-      {data.scriptChanges && (
-        <p className="text-xs text-flyfx-muted">
-          <span className="text-flyfx-gold">Changes today:</span> {data.scriptChanges}
-        </p>
-      )}
+    );
+  }
+
+  function Line({ label, text, labelColor }: { label?: string; text: string; labelColor?: string }) {
+    return (
+      <div className="text-xs leading-relaxed">
+        {label && <span className={`font-semibold ${labelColor || "text-flyfx-gold"}`}>{label} </span>}
+        <span className="text-white/85">{text}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-flyfx-card border border-flyfx-border rounded-xl p-4 space-y-2">
+      <h2 className="text-sm font-semibold text-flyfx-gold uppercase tracking-wider mb-1">
+        Call Playbook
+      </h2>
+
+      <Section id="openers" title="Opening Lines — First 15 Seconds" color="text-flyfx-gold">
+        <div className="space-y-3">
+          <div>
+            <p className="text-[10px] text-flyfx-gold uppercase mb-1 font-semibold">Primary — use by default</p>
+            <p className="text-xs text-white/90 leading-relaxed italic">&quot;Hi [Name], Kyle from FlyFX — air charter specialist. With the Gulf airspace closure now in its fourth week, forwarders are looking for charter alternatives. Does charter come up for your team at all?&quot;</p>
+          </div>
+          <div>
+            <p className="text-[10px] text-amber-400 uppercase mb-1 font-semibold">Variant — if you know their vertical</p>
+            <p className="text-xs text-white/80 leading-relaxed italic">&quot;Hi [Name], Kyle from FlyFX. I saw you handle [auto parts / DG chemicals / pharma]. With airlines refusing DG uplift on Gulf-adjacent routes, we&apos;ve been helping forwarders fill that gap. Is that something you&apos;re seeing?&quot;</p>
+          </div>
+          <div>
+            <p className="text-[10px] text-amber-400 uppercase mb-1 font-semibold">Variant — if you have company intel</p>
+            <p className="text-xs text-white/80 leading-relaxed italic">&quot;Hi [Name], Kyle from FlyFX. I noticed [CEO posted about charter / you recently got IATA registered / you handle North Sea rig logistics]. I work with forwarders in exactly that space — got 60 seconds?&quot;</p>
+          </div>
+          <div className="bg-green-500/10 border border-green-500/20 rounded p-2">
+            <p className="text-[10px] text-green-400 uppercase font-bold mb-0.5">Say this on EVERY call — early, not late</p>
+            <p className="text-xs text-white font-medium">&quot;We work exclusively with freight forwarders — we will never approach your end clients directly.&quot;</p>
+          </div>
+        </div>
+      </Section>
+
+      <Section id="qualifying" title="Qualifying Questions" color="text-blue-400">
+        <div className="space-y-2">
+          <Line label="IF YES:" text="&quot;What kind of situations trigger it? Oversized, time-critical, DG, or something else?&quot;" labelColor="text-green-400" />
+          <Line label="DIG DEEPER:" text="&quot;How often does that come up — monthly, quarterly, once a year?&quot;" labelColor="text-blue-400" />
+          <Line label="THE GOLD Q:" text="&quot;What happens when a client calls on a Friday with something that won't fit on scheduled? Who do you call?&quot;" labelColor="text-flyfx-gold" />
+          <Line label="LOST DEALS:" text="&quot;Have you ever had a charter enquiry you couldn't fulfil? What was the cargo?&quot;" labelColor="text-amber-400" />
+          <Line label="LOST REVENUE:" text="&quot;If you'd had a charter partner handling it end-to-end, would you have quoted that deal? How much was it worth?&quot;" labelColor="text-amber-400" />
+          <Line label="MISCONCEPTION:" text="&quot;You mentioned you don't have the capacity — just to clarify, you don't need to fill a whole aircraft. We do part charters. Does that change things?&quot;" labelColor="text-red-400" />
+        </div>
+      </Section>
+
+      <Section id="objections" title="The 8 Objections — 95% of Calls" color="text-red-400">
+        <div className="space-y-3">
+          {[
+            { obj: "\"We don't do charters / We don't need charter.\"", resp: "\"Fair enough — most forwarders only need us 3-5 times a year. For the DG shipment airlines refuse, the oversized piece that can't wait for sea, the Sunday night emergency. When that moment comes, it helps to already have a specialist's number. That's all I'm asking for.\"" },
+            { obj: "\"We already have a broker / We have preferred partners.\"", resp: "\"I completely respect that — I'm not asking to replace anyone. Our strongest relationships started as backup only. The first time your primary comes back empty-handed on a DG full-freighter at short notice, you'll want a second name ready. Can I be that second name?\"" },
+            { obj: "\"We book direct with airlines — we don't need a broker.\"", resp: "\"That works perfectly for regular lanes. We cover the situations airlines can't — oversized, DG class restrictions, Sunday night cutoffs, routes that don't exist on scheduled. Has there been a shipment you couldn't place on your usual airlines?\"" },
+            { obj: "\"Just send me some info / Send a brochure.\"", resp: "\"Happy to — so I send the right thing: is it mainly oversized, time-critical, or DG situations where charter tends to come up for you? And what's your direct email so it doesn't land in a generic inbox?\"" },
+            { obj: "\"Your price / charters are too expensive.\"", resp: "\"Charter isn't about regular cargo — it's about the 3 AM Friday call where nothing fits and your client is screaming. The question isn't the cost of the charter — it's the cost of NOT having one. A stopped production line dwarfs the freight bill.\"" },
+            { obj: "\"We're too small / Not at that stage yet.\"", resp: "\"No problem — happy to stay in touch as you grow. Quick question before I go: do you know anyone in your network who handles oversized or time-critical air freight? Even a name would be really useful.\"" },
+            { obj: "\"We go direct to operators / We don't need a middleman.\"", resp: "\"Works well for regular routes. A broker earns its place when things get complicated — permits for unusual destinations, alternative aircraft on a tech issue, 3 AM on a Saturday with a stuck shipment. When a charter goes wrong, you want someone whose only job is fixing it.\"" },
+            { obj: "\"Not interested. / No thanks.\"", resp: "\"Understood — I appreciate you being straight with me. Thanks for your time.\" [Hang up. Do NOT push. Move to next call.]" },
+          ].map((item, i) => (
+            <div key={i} className="space-y-1">
+              <p className="text-[10px] text-red-400 font-semibold">THEY SAY: <span className="text-white/90 font-normal">{item.obj}</span></p>
+              <p className="text-[10px] text-green-400 font-semibold">YOU SAY: <span className="text-white/80 font-normal">{item.resp}</span></p>
+            </div>
+          ))}
+        </div>
+      </Section>
+
+      <Section id="spin" title="SPIN Questions — When Engaged 2+ Min" color="text-purple-400">
+        <div className="space-y-2">
+          <Line label="SITUATION:" text="&quot;How does your air freight desk currently handle charter requests when they come in?&quot;" labelColor="text-blue-400" />
+          <Line label="PROBLEM:" text="&quot;What causes the most stress when a charter situation arises — availability, price, or timeline?&quot;" labelColor="text-amber-400" />
+          <Line label="IMPLICATION:" text="&quot;When a charter has fallen through or come in late, what's the impact on your client relationship?&quot;" labelColor="text-red-400" />
+          <Line label="NEED-PAYOFF:" text="&quot;If you had a broker who responded with options within the hour, any time of day — how would that change things?&quot;" labelColor="text-green-400" />
+        </div>
+      </Section>
+
+      <Section id="closing" title="Closing — How to End Every Call" color="text-green-400">
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <p className="text-[10px] text-amber-400 uppercase font-semibold mb-1">Warm — interested</p>
+            <p className="text-xs text-white/80 leading-relaxed italic">&quot;I&apos;ll send our brochure within the hour. What&apos;s your direct email? And is it fine if I follow up in two weeks?&quot;</p>
+            <p className="text-[10px] text-flyfx-muted mt-1">Capture: name, email, follow-up date</p>
+          </div>
+          <div>
+            <p className="text-[10px] text-red-400 uppercase font-semibold mb-1">Hot — live requirement</p>
+            <p className="text-xs text-white/80 leading-relaxed italic">&quot;Let me take some quick details and I&apos;ll turn around a quote today. Origin, destination, cargo type, dimensions, weight?&quot;</p>
+            <p className="text-[10px] text-flyfx-muted mt-1">Get specifics. Quote same day.</p>
+          </div>
+        </div>
+      </Section>
+
+      <Section id="disqualify" title="True Disqualifiers — Hang Up Fast" color="text-flyfx-muted">
+        <div className="space-y-1.5 text-xs text-white/70">
+          <p>✕ No air freight desk at all — road or ocean only</p>
+          <p>✕ Books direct with airlines AND firm. Pushed back twice = dead end.</p>
+          <p>✕ Under 10 employees / startup with no charter history</p>
+          <p>✕ Handles their own charters internally AND satisfied (e.g. PML Sea Free)</p>
+        </div>
+      </Section>
     </div>
   );
 }
@@ -407,6 +516,9 @@ function DealCard({
   onStatusChange,
   onHubSpotImport,
   importing,
+  onFollowUpEmail,
+  showAsCompleted,
+  onEdit,
 }: {
   deal: Deal;
   isExpanded: boolean;
@@ -415,13 +527,19 @@ function DealCard({
   onStatusChange: (status: DealStatus) => void;
   onHubSpotImport: () => void;
   importing: boolean;
+  onFollowUpEmail: () => void;
+  showAsCompleted?: boolean;
+  onEdit?: (fields: Partial<Deal>) => void;
 }) {
-  const priorityClass =
-    deal.priority === "hot"
-      ? "priority-hot"
-      : deal.priority === "warm"
-      ? "priority-warm"
-      : "priority-nurture";
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmHubspotExisting, setConfirmHubspotExisting] = useState(false);
+  const [pendingSentiment, setPendingSentiment] = useState<"" | "positive" | "negative" | "gatekeeper">("");
+  const [pendingNextStep, setPendingNextStep] = useState<"" | "callback" | "followup">("");
+  const [editing, setEditing] = useState(false);
+  const [editName, setEditName] = useState(deal.name);
+  const [editTitle, setEditTitle] = useState(deal.title);
+  const [editPhone, setEditPhone] = useState(deal.phone || "");
+  const [editEmail, setEditEmail] = useState(deal.email || "");
 
   const priorityBadge =
     deal.priority === "hot"
@@ -430,122 +548,189 @@ function DealCard({
       ? "bg-amber-500/20 text-amber-400"
       : "bg-gray-500/20 text-gray-400";
 
+  // Overlay logic: callback_later never shows overlay. Follow-up overrules sentiment.
+  const shouldOverlay = showAsCompleted && status !== "callback_later";
+
+  // Determine overlay label — follow-up overrules sentiment tags
+  const getOverlayLabel = () => {
+    if (status === "existing_hubspot") return "ALREADY IN HUBSPOT";
+    if (status === "follow_up_email") return "FOLLOW-UP";
+    if (status === "imported") return "IN HUBSPOT";
+    if (status === "they_callback") return "POSITIVE";
+    if (status === "negative") return "NEGATIVE";
+    if (status === "gatekeeper") return "GATEKEEPER";
+    return "COMPLETED";
+  };
+
+  const getOverlayBg = () => {
+    if (status === "existing_hubspot") return "rgba(249, 115, 22, 0.15)";
+    if (status === "follow_up_email") return "rgba(59, 130, 246, 0.15)";
+    if (status === "imported") return "rgba(20, 184, 166, 0.15)";
+    if (status === "they_callback") return "rgba(34, 197, 94, 0.15)";
+    if (status === "negative") return "rgba(239, 68, 68, 0.12)";
+    if (status === "gatekeeper") return "rgba(239, 68, 68, 0.12)";
+    return "rgba(0, 0, 0, 0.08)";
+  };
+
+  const getOverlayTextColor = () => {
+    if (status === "existing_hubspot") return "rgba(249, 115, 22, 0.25)";
+    if (status === "follow_up_email") return "rgba(59, 130, 246, 0.25)";
+    if (status === "imported") return "rgba(20, 184, 166, 0.25)";
+    if (status === "they_callback") return "rgba(34, 197, 94, 0.25)";
+    if (status === "negative") return "rgba(239, 68, 68, 0.20)";
+    if (status === "gatekeeper") return "rgba(239, 68, 68, 0.20)";
+    return "rgba(0, 0, 0, 0.08)";
+  };
+
+  const saveEdit = () => {
+    if (onEdit) {
+      onEdit({
+        name: editName,
+        title: editTitle,
+        phone: editPhone || null,
+        email: editEmail || null,
+      });
+    }
+    setEditing(false);
+  };
+
+  const priorityClass =
+    deal.priority === "hot"
+      ? "priority-hot"
+      : deal.priority === "warm"
+      ? "priority-warm"
+      : "priority-nurture";
+
   return (
     <div
-      className={`deal-card bg-flyfx-card border border-flyfx-border rounded-xl overflow-hidden card-enter ${priorityClass}`}
+      className={`deal-card relative rounded-xl overflow-hidden card-enter transition ${
+        shouldOverlay ? "opacity-50" : deal.priority === "hot" ? "priority-hot" : ""
+      }`}
+      style={{ background: `var(--card)`, borderColor: `var(--border)`, border: `1px solid var(--border)` }}
     >
-      {/* Header — always visible */}
-      <button onClick={onToggle} className="w-full text-left p-4 hover:bg-white/[0.02] transition">
-        <div className="flex items-start justify-between gap-3">
+      {/* HOT badge — corner sticker */}
+      {deal.priority === "hot" && !shouldOverlay && (
+        <div className="absolute top-0 right-0 bg-flyfx-gold text-black text-[9px] font-black px-2 py-0.5 rounded-bl-lg z-10">
+          HOT
+        </div>
+      )}
+
+      {/* Completed overlay — full color wash with embossed text */}
+      {shouldOverlay && (
+        <div
+          className="absolute inset-0 z-10 flex items-center justify-center rounded-xl overflow-hidden"
+          style={{ background: getOverlayBg() }}
+          onClick={onToggle}
+        >
+          <span
+            className="text-3xl sm:text-4xl font-black tracking-[0.2em] uppercase select-none"
+            style={{ color: getOverlayTextColor() }}
+          >
+            {getOverlayLabel()}
+          </span>
+          <button
+            onClick={(e) => { e.stopPropagation(); onStatusChange("new"); }}
+            className="absolute top-2 right-2 text-[9px] font-semibold px-2 py-0.5 rounded transition hover:opacity-100"
+            style={{ color: `var(--muted)`, background: `var(--card)`, border: `1px solid var(--border)`, opacity: 0.7 }}
+          >
+            Restore
+          </button>
+        </div>
+      )}
+
+      {/* Header — clean, readable card face */}
+      <div onClick={onToggle} className="w-full text-left p-4 cursor-pointer transition hover:opacity-90">
+        {/* Main info */}
+        <div className="flex items-start justify-between gap-4">
+          {/* Left: person + company */}
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-flyfx-gold font-bold text-lg">#{deal.rank}</span>
-              <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium uppercase ${priorityBadge}`}>
-                {deal.priority}
-              </span>
-              {deal.assignedTo && deal.assignedTo !== "shared" && (
-                <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
-                  deal.assignedTo === "kyle"
-                    ? "bg-blue-500/20 text-blue-400"
-                    : "bg-purple-500/20 text-purple-400"
-                }`}>
-                  {deal.assignedTo === "kyle" ? "KYLE" : "GUS"}
-                </span>
-              )}
-              {deal.phone ? (
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-500/20 text-green-400">
-                  CALL
-                </span>
-              ) : (
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400">
-                  EMAIL
-                </span>
-              )}
-            </div>
-            <h3 className="font-semibold text-white truncate">{deal.name}</h3>
-            <p className="text-sm text-flyfx-muted truncate">
-              {deal.title} — {deal.company}
+            {editing ? (
+              <div className="space-y-1.5" onClick={(e) => e.stopPropagation()}>
+                <input value={editName} onChange={(e) => setEditName(e.target.value)}
+                  className="w-full rounded px-2 py-1 text-sm outline-none border border-flyfx-gold/50" style={{ background: `var(--subtle)`, color: `var(--text)` }} placeholder="Name" />
+                <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)}
+                  className="w-full rounded px-2 py-1 text-xs outline-none border border-flyfx-gold/50" style={{ background: `var(--subtle)`, color: `var(--text)` }} placeholder="Title" />
+              </div>
+            ) : (
+              <>
+                <h3 className="font-semibold text-base truncate" style={{ color: `var(--text)` }}>{deal.name}</h3>
+                <p className="text-sm truncate" style={{ color: `var(--muted)` }}>{deal.title}</p>
+              </>
+            )}
+            <p className="text-xs mt-1.5 font-medium truncate" style={{ color: `var(--text)` }}>
+              {deal.company}
             </p>
-            <p className="text-xs text-flyfx-muted mt-0.5">
-              {deal.city}, {deal.country}
-              {deal.employees && ` · ${deal.employees} staff`}
+            <p className="text-xs truncate" style={{ color: `var(--muted)` }}>
+              {deal.city}{deal.city && deal.country ? ", " : ""}{deal.country}
             </p>
           </div>
-          <div className="flex-shrink-0 flex flex-col items-end gap-1.5 mt-1">
+
+          {/* Right: contact details + score */}
+          <div className="flex flex-col items-end gap-1 flex-shrink-0 text-right">
+            {(deal as any).score && (
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-flyfx-gold/10 text-flyfx-gold font-semibold">
+                {(deal as any).score}
+              </span>
+            )}
             {deal.phone && (
-              <a
-                href={`tel:${deal.phone}`}
-                onClick={(e) => e.stopPropagation()}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-500 transition"
-              >
-                <PhoneIcon /> Call
+              <a href={`tel:${deal.phone}`} onClick={(e) => e.stopPropagation()} className="text-xs text-flyfx-gold hover:underline">
+                {deal.phone}
               </a>
             )}
-            {deal.email && (
-              <a
-                href={`mailto:${deal.email}`}
-                onClick={(e) => e.stopPropagation()}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-flyfx-border text-white text-xs font-medium rounded-lg hover:bg-white/10 transition"
-              >
-                <MailIcon /> Email
+            {deal.domain && (
+              <a href={`https://${deal.domain}`} target="_blank" rel="noopener" onClick={(e) => e.stopPropagation()} className="text-[11px] hover:underline" style={{ color: `var(--muted)` }}>
+                {deal.domain}
               </a>
             )}
           </div>
         </div>
-      </button>
 
-      {/* Expanded detail */}
+      </div>
+
+      {/* Expanded detail — company intel and call prep */}
       {isExpanded && (
-        <div className="border-t border-flyfx-border p-4 space-y-4 bg-flyfx-dark/50">
-          {/* Contact details */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
-            {deal.phone && (
-              <div>
-                <span className="text-flyfx-muted text-xs">Phone:</span>{" "}
-                <a href={`tel:${deal.phone}`} className="text-flyfx-gold hover:underline">
-                  {deal.phone}
-                </a>
-              </div>
-            )}
-            {deal.email && (
-              <div>
-                <span className="text-flyfx-muted text-xs">Email:</span>{" "}
-                <a href={`mailto:${deal.email}`} className="text-flyfx-gold hover:underline">
-                  {deal.email}
-                </a>
-              </div>
-            )}
-            {deal.linkedin && (
-              <div>
-                <a
-                  href={deal.linkedin}
-                  target="_blank"
-                  rel="noopener"
-                  className="text-blue-400 hover:underline text-xs"
-                >
-                  View LinkedIn Profile →
-                </a>
-              </div>
-            )}
-            {deal.domain && (
-              <div>
-                <a
-                  href={`https://${deal.domain}`}
-                  target="_blank"
-                  rel="noopener"
-                  className="text-flyfx-muted hover:text-white text-xs"
-                >
-                  {deal.domain} →
-                </a>
-              </div>
-            )}
+        <div className="border-t border-flyfx-border p-4 space-y-3 bg-flyfx-dark/50">
+          {/* Verified / source meta — gray box */}
+          <div className="flex flex-wrap items-center gap-2 bg-flyfx-dark rounded-lg px-3 py-2">
+            {deal.enrichmentStatus && <span className="text-[10px] text-flyfx-muted">{deal.enrichmentStatus}</span>}
+            {deal.source && <span className="text-[10px] text-flyfx-muted">{deal.source}</span>}
+            {deal.specialisation && <span className="text-[10px] text-flyfx-muted">{deal.specialisation}</span>}
+            {deal.employees && <span className="text-[10px] text-flyfx-muted">{deal.employees} staff</span>}
           </div>
 
-          {/* Why Today */}
-          <Section title="Why Today" content={deal.whyToday} highlight />
+          {/* Why Today — bullet-pointed with company intel */}
+          <div className="rounded-lg p-3 bg-flyfx-gold/10 border border-flyfx-gold/20">
+            <p className="text-[10px] text-flyfx-muted uppercase tracking-wider mb-2">Why Today</p>
+            <ul className="space-y-1.5 text-sm leading-snug">
+              {deal.whyToday && deal.whyToday.split(/[.\n]+/).filter((s: string) => s.trim()).map((point: string, i: number) => (
+                <li key={i} className="flex items-start gap-2">
+                  <span className="text-flyfx-gold mt-0.5 flex-shrink-0">-</span>
+                  <span>{point.trim()}</span>
+                </li>
+              ))}
+              {deal.companyIntel && deal.companyIntel.split(/[.\n]+/).filter((s: string) => s.trim()).map((point: string, i: number) => (
+                <li key={`ci-${i}`} className="flex items-start gap-2">
+                  <span className="text-flyfx-muted mt-0.5 flex-shrink-0">-</span>
+                  <span className="text-flyfx-muted">{point.trim()}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
 
           {/* Opening Line */}
           <Section title="Opening Line" content={`"${deal.openingLine}"`} />
+
+          {/* Lead Differentiator */}
+          <div className="flex items-start gap-2 px-1">
+            <span className="text-flyfx-gold text-xs font-semibold uppercase flex-shrink-0 mt-0.5">Lead With:</span>
+            <p className="text-sm">
+              {deal.leadDifferentiator}
+              {deal.differentiatorDetail && <span className="text-flyfx-muted"> — {deal.differentiatorDetail}</span>}
+            </p>
+          </div>
+
+          {/* Objection */}
+          <Section title="Likely Objection" content={deal.objection} />
 
           {/* Call Script */}
           {deal.callScript && <Section title="Call Script" content={deal.callScript} />}
@@ -562,99 +747,221 @@ function DealCard({
             </div>
           )}
 
-          {/* Lead Differentiator */}
-          <div className="flex items-start gap-2">
-            <span className="text-flyfx-gold text-xs font-semibold uppercase flex-shrink-0 mt-0.5">
-              Lead With:
-            </span>
-            <p className="text-sm">
-              {deal.leadDifferentiator}
-              {deal.differentiatorDetail && (
-                <span className="text-flyfx-muted"> — {deal.differentiatorDetail}</span>
-              )}
-            </p>
-          </div>
-
-          {/* Objection */}
-          <Section title="Likely Objection" content={deal.objection} />
-
           {/* Follow-up */}
           <Section title="Follow-up Trigger" content={deal.followUpTrigger} />
 
-          {/* Meta */}
-          <div className="flex items-center gap-3 text-[10px] text-flyfx-muted pt-2 border-t border-flyfx-border">
-            <span>{deal.enrichmentStatus}</span>
-            <span>{deal.source}</span>
-            {deal.specialisation && <span>{deal.specialisation}</span>}
+          {/* Inline Coach — Pre-call brief */}
+          <div className="rounded-lg p-3 bg-blue-500/5 border border-blue-500/20">
+            <p className="text-[10px] text-blue-400 uppercase tracking-wider mb-2 font-semibold">Pre-Call Coach</p>
+            <ul className="space-y-1 text-xs text-white/80">
+              <li>- FlyFX works exclusively with freight forwarders — say this early</li>
+              <li>- Position as "additional option, not replacement" — they likely have existing brokers</li>
+              <li>- Ask: "Does charter come up for your team at all?" — open-ended, non-threatening</li>
+              <li>- If positive: suggest a 15-min call to discuss their trickiest routing challenges</li>
+            </ul>
+            <p className="text-[10px] text-red-400 mt-2 font-medium">DO NOT SAY: amazing, incredible, seamless, cutting-edge, game-changer, leverage</p>
           </div>
         </div>
       )}
 
+      {/* Follow-up composer — shown when expanded and status is follow_up_email */}
+      {isExpanded && status === "follow_up_email" && (
+        <FollowUpComposer
+          deal={deal}
+          onSent={() => onStatusChange("imported")}
+        />
+      )}
+
       {/* Status action bar — always visible at bottom */}
-      <div className="border-t border-flyfx-border px-3 py-2" onClick={(e) => e.stopPropagation()}>
-        {(status === "new" || status === "called") ? (
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {/* Called toggle */}
-            <button
-              onClick={() => onStatusChange(status === "called" ? "new" : "called")}
-              className={`flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold rounded-lg border transition ${
-                status === "called"
-                  ? "bg-flyfx-gold/20 border-flyfx-gold text-flyfx-gold"
-                  : "border-flyfx-border text-flyfx-muted hover:text-white hover:border-white/30"
-              }`}
-            >
-              <CheckIcon /> {status === "called" ? "Called ✓" : "Called?"}
-            </button>
-            <div className="w-px h-4 bg-flyfx-border mx-0.5" />
-            {/* Outcome tags */}
-            <button
-              onClick={() => { onStatusChange("they_callback"); }}
-              className="flex items-center gap-1 px-2.5 py-1 text-[11px] rounded-lg border border-blue-500/30 text-blue-400 hover:bg-blue-500/10 transition"
-            >
-              <IncomingIcon /> Good
-            </button>
-            <button
-              onClick={() => onStatusChange("callback_later")}
-              className="flex items-center gap-1 px-2.5 py-1 text-[11px] rounded-lg border border-amber-500/30 text-amber-400 hover:bg-amber-500/10 transition"
-            >
-              <ClockIcon /> Call Back
-            </button>
-            <button
-              onClick={onHubSpotImport}
-              disabled={importing}
-              className="flex items-center gap-1 px-2.5 py-1 text-[11px] rounded-lg border border-green-500/30 text-green-400 hover:bg-green-500/10 transition disabled:opacity-50"
-            >
-              <HubSpotIcon /> {importing ? "..." : "HubSpot"}
-            </button>
-            <button
-              onClick={() => onStatusChange("deleted")}
-              className="flex items-center gap-1 px-2.5 py-1 text-[11px] rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10 transition"
-            >
-              <TrashIcon /> Bad
-            </button>
+      <div className="border-t border-flyfx-border px-3 py-2 space-y-2" onClick={(e) => e.stopPropagation()}>
+        {status === "existing_hubspot" ? (
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-400 font-medium">ALREADY IN HUBSPOT</span>
+            <span className="text-[10px] text-flyfx-muted">Won't appear in future searches</span>
           </div>
         ) : status === "imported" ? (
           <div className="flex items-center gap-2">
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-500/20 text-green-400 font-medium">IN HUBSPOT</span>
-            <button onClick={() => onStatusChange("new")} className="ml-auto text-[10px] text-flyfx-muted hover:text-white transition">Reset</button>
-          </div>
-        ) : status === "callback_later" ? (
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 font-medium">CALL BACK LATER</span>
-            <button onClick={() => onStatusChange("new")} className="ml-auto text-[10px] text-flyfx-muted hover:text-white transition">Reset</button>
-          </div>
-        ) : status === "they_callback" ? (
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 font-medium">THEY'LL CALL US</span>
-            <button onClick={() => onStatusChange("new")} className="ml-auto text-[10px] text-flyfx-muted hover:text-white transition">Reset</button>
-          </div>
-        ) : status === "deleted" ? (
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 font-medium">BAD / DELETED</span>
             <button onClick={() => onStatusChange("new")} className="ml-auto text-[10px] text-flyfx-muted hover:text-white transition">Restore</button>
           </div>
-        ) : null}
+        ) : confirmHubspotExisting ? (
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[11px] text-orange-400 font-medium flex-1">Mark {deal.company} as already in HubSpot?</span>
+            <button
+              onClick={() => { onStatusChange("existing_hubspot"); setConfirmHubspotExisting(false); }}
+              className="px-2.5 py-1 text-[11px] rounded-lg bg-orange-500/20 border border-orange-500 text-orange-400 font-semibold hover:bg-orange-500/30 transition"
+            >Confirm</button>
+            <button onClick={() => setConfirmHubspotExisting(false)} className="px-2.5 py-1 text-[11px] rounded-lg border border-flyfx-border text-flyfx-muted hover:text-white transition">Cancel</button>
+          </div>
+        ) : (
+          <>
+            {/* Quick actions — single row of outcome buttons */}
+            <div className="flex items-center gap-1.5">
+              {[
+                { label: "Called", status: "called" as DealStatus, style: "border-flyfx-gold/40 text-flyfx-gold" },
+                { label: "Positive", status: "they_callback" as DealStatus, style: "border-green-500/40 text-green-600 dark:text-green-400" },
+                { label: "Callback", status: "callback_later" as DealStatus, style: "border-amber-500/40 text-amber-600 dark:text-amber-400" },
+                { label: "Email", status: "follow_up_email" as DealStatus, style: "border-blue-500/40 text-blue-600 dark:text-blue-400" },
+                { label: "Negative", status: "negative" as DealStatus, style: "border-red-500/40 text-red-500" },
+              ].map((a) => (
+                <button
+                  key={a.label}
+                  onClick={(e) => { e.stopPropagation(); onStatusChange(a.status); }}
+                  className={`flex-1 py-2 text-[11px] font-semibold rounded-lg border transition hover:opacity-80 ${a.style}`}
+                  style={{ background: `var(--subtle)` }}
+                >
+                  {a.label}
+                </button>
+              ))}
+            </div>
+            {/* Secondary actions */}
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={(e) => { e.stopPropagation(); onHubSpotImport(); }}
+                disabled={importing}
+                className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[11px] font-medium rounded-lg border border-teal-500/30 text-teal-600 dark:text-teal-400 transition hover:opacity-80 disabled:opacity-50"
+                style={{ background: `var(--subtle)` }}
+              >
+                <HubSpotIcon /> {importing ? "Importing..." : "HubSpot"}
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); setConfirmHubspotExisting(true); }}
+                className="flex-1 py-1.5 text-[11px] font-medium rounded-lg border border-orange-500/30 text-orange-600 dark:text-orange-400 transition hover:opacity-80"
+                style={{ background: `var(--subtle)` }}
+              >
+                Already in HS
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); onStatusChange("deleted"); }}
+                className="py-1.5 px-3 text-[11px] font-medium rounded-lg border transition hover:opacity-80"
+                style={{ background: `var(--subtle)`, borderColor: `var(--border)`, color: `var(--muted)` }}
+              >
+                Delete
+              </button>
+            </div>
+          </>
+        )}
       </div>
+    </div>
+  );
+}
+
+// ─── FOLLOW-UP EMAIL COMPOSER ────────────────────────────────
+function FollowUpComposer({ deal, onSent }: { deal: Deal; onSent: () => void }) {
+  const [directEmail, setDirectEmail] = useState(deal.email || "");
+  const [subject, setSubject] = useState(deal.emailSubject || "");
+  const [body, setBody] = useState(deal.coldEmail || "");
+  const [transcript, setTranscript] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [showTranscript, setShowTranscript] = useState(false);
+
+  const generate = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ deal, transcript: transcript || undefined, directEmail: directEmail || undefined }),
+      });
+      const json = await res.json();
+      if (json.subject) setSubject(json.subject);
+      if (json.body) setBody(json.body);
+      if (json.toEmail && !directEmail) setDirectEmail(json.toEmail);
+    } catch {}
+    setLoading(false);
+  };
+
+  const copy = () => {
+    const text = `To: ${directEmail}\nSubject: ${subject}\n\n${body}`;
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  return (
+    <div className="border-t border-flyfx-border bg-blue-500/5 p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-[10px] text-blue-400 uppercase tracking-wider font-semibold">Follow-up Email</p>
+        <button
+          onClick={() => setShowTranscript((v) => !v)}
+          className="text-[10px] text-flyfx-muted hover:text-white transition border border-flyfx-border rounded px-2 py-0.5"
+        >
+          {showTranscript ? "Hide transcript" : "+ Add call notes"}
+        </button>
+      </div>
+
+      {showTranscript && (
+        <textarea
+          value={transcript}
+          onChange={(e) => setTranscript(e.target.value)}
+          placeholder="Paste call notes or transcript here to personalise the email..."
+          className="w-full h-24 px-3 py-2 bg-flyfx-dark border border-flyfx-border rounded-lg text-xs text-white placeholder-flyfx-muted outline-none focus:border-blue-500 transition resize-none"
+        />
+      )}
+
+      <button
+        onClick={generate}
+        disabled={loading}
+        className="w-full py-2 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-500 transition disabled:opacity-50"
+      >
+        {loading ? "Generating..." : body ? "Re-generate email" : "Generate personalised email"}
+      </button>
+
+      {body && (
+        <>
+          <div className="space-y-2">
+            <div>
+              <p className="text-[10px] text-flyfx-muted uppercase tracking-wider mb-1">To</p>
+              <input
+                value={directEmail}
+                onChange={(e) => setDirectEmail(e.target.value)}
+                placeholder="Email address"
+                className="w-full px-3 py-2 bg-flyfx-dark border border-flyfx-border rounded-lg text-xs text-white outline-none focus:border-blue-500 transition"
+              />
+            </div>
+            <div>
+              <p className="text-[10px] text-flyfx-muted uppercase tracking-wider mb-1">Subject</p>
+              <input
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+                className="w-full px-3 py-2 bg-flyfx-dark border border-flyfx-border rounded-lg text-xs text-white outline-none focus:border-blue-500 transition"
+              />
+            </div>
+            <div>
+              <p className="text-[10px] text-flyfx-muted uppercase tracking-wider mb-1">Body</p>
+              <textarea
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                className="w-full h-48 px-3 py-2 bg-flyfx-dark border border-flyfx-border rounded-lg text-xs text-white outline-none focus:border-blue-500 transition resize-none leading-relaxed"
+              />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={copy}
+              className="flex-1 py-2 rounded-lg bg-flyfx-card border border-flyfx-border text-xs font-medium hover:bg-white/10 transition"
+            >
+              {copied ? "Copied!" : "Copy to clipboard"}
+            </button>
+            {directEmail && (
+              <a
+                href={`mailto:${directEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`}
+                className="flex-1 py-2 rounded-lg bg-blue-600 text-white text-xs font-medium text-center hover:bg-blue-500 transition"
+              >
+                Open in mail app
+              </a>
+            )}
+          </div>
+          <button
+            onClick={onSent}
+            className="w-full py-2 rounded-lg bg-green-600/20 border border-green-500/30 text-green-400 text-xs font-semibold hover:bg-green-600/30 transition"
+          >
+            Mark as sent — move to Imported
+          </button>
+        </>
+      )}
     </div>
   );
 }
@@ -732,13 +1039,6 @@ function ClockIcon() {
   );
 }
 
-function IncomingIcon() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-      <path d="M16 2v6h6M22 2l-8.5 8.5M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3" />
-    </svg>
-  );
-}
 
 function TrashIcon() {
   return (
@@ -1823,13 +2123,27 @@ function PipelineView({ onDealsLoaded }: { onDealsLoaded: (data: DailyData) => v
 }
 
 // ─── GRANOLA VIEW ────────────────────────────────────────────
-function GranolaView({ deals }: { deals?: Deal[] }) {
+function GranolaView({ deals, preSelectedDeal, onClear }: {
+  deals?: Deal[];
+  preSelectedDeal?: { deal: Deal; outcome: "positive" | "negative" } | null;
+  onClear?: () => void;
+}) {
   const [transcript, setTranscript] = useState("");
   const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
   const [loading, setLoading] = useState(false);
   const [analysis, setAnalysis] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState<any>(null);
+
+  // Pre-select a deal when navigated here from a card action
+  useEffect(() => {
+    if (preSelectedDeal) {
+      setSelectedDeal(preSelectedDeal.deal);
+      setAnalysis(null);
+      setTranscript("");
+      onClear?.();
+    }
+  }, [preSelectedDeal]);
 
   useEffect(() => {
     fetch("/api/granola")
@@ -2207,20 +2521,1067 @@ function AgentView({ data }: { data?: DailyData | null }) {
   );
 }
 
+// ─── CHAT VIEW (Intelligence Brain) ─────────────────────────
+interface BrainInsightUI {
+  id: string;
+  type: "adjust_scoring" | "adjust_script" | "exclude_or_prioritize";
+  date: string;
+  reason: string;
+  active: boolean;
+  dimension?: string;
+  filter?: Record<string, string>;
+  modifier?: number;
+  target?: string;
+  instruction?: string;
+  action?: "exclude" | "prioritize";
+  scope?: string;
+  value?: string;
+  geography?: string;
+}
+
+function InsightCard({ insight, onDelete, onToggle }: {
+  insight: BrainInsightUI;
+  onDelete: (id: string) => void;
+  onToggle: (id: string, active: boolean) => void;
+}) {
+  const typeColors: Record<string, string> = {
+    adjust_scoring: "border-blue-500/40 bg-blue-500/10",
+    adjust_script: "border-green-500/40 bg-green-500/10",
+    exclude_or_prioritize: "border-orange-500/40 bg-orange-500/10",
+  };
+  const typeIcons: Record<string, string> = {
+    adjust_scoring: "##",
+    adjust_script: "Aa",
+    exclude_or_prioritize: "!!",
+  };
+  const typeLabels: Record<string, string> = {
+    adjust_scoring: "Scoring",
+    adjust_script: "Script",
+    exclude_or_prioritize: "Rule",
+  };
+
+  const summary = insight.type === "adjust_scoring"
+    ? `${insight.dimension} ${(insight.modifier || 0) > 0 ? "+" : ""}${insight.modifier} when ${insight.filter ? Object.entries(insight.filter).map(([k, v]) => `${k}=${v}`).join(", ") : "all"}`
+    : insight.type === "adjust_script"
+    ? `${insight.target}: "${insight.instruction?.slice(0, 60)}${(insight.instruction?.length || 0) > 60 ? "..." : ""}"`
+    : `${insight.action} ${insight.scope}="${insight.value}"${insight.geography ? ` in ${insight.geography}` : ""}`;
+
+  return (
+    <div className={`border rounded-lg p-2.5 ${typeColors[insight.type]} ${!insight.active ? "opacity-50" : ""}`}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-black/20 shrink-0">
+            {typeIcons[insight.type]}
+          </span>
+          <div className="min-w-0">
+            <span className="text-[10px] font-semibold uppercase tracking-wide opacity-70">{typeLabels[insight.type]}</span>
+            <p className="text-xs font-medium truncate">{summary}</p>
+            <p className="text-[10px] opacity-60 mt-0.5">{insight.reason}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            onClick={() => onToggle(insight.id, !insight.active)}
+            className="text-[10px] px-1.5 py-0.5 rounded border border-white/10 hover:border-white/30 transition"
+            title={insight.active ? "Disable" : "Enable"}
+          >
+            {insight.active ? "ON" : "OFF"}
+          </button>
+          <button
+            onClick={() => onDelete(insight.id)}
+            className="text-[10px] px-1.5 py-0.5 rounded border border-red-500/30 text-red-400 hover:bg-red-500/20 transition"
+            title="Delete"
+          >
+            X
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ChatView({ data }: { data?: DailyData | null }) {
+  const [messages, setMessages] = useState<Array<{ role: "user" | "assistant"; content: string; insights?: BrainInsightUI[] }>>([]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [brainInsights, setBrainInsights] = useState<BrainInsightUI[]>([]);
+  const [showBrain, setShowBrain] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // Load brain on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/brain");
+        if (res.ok) {
+          const brain = await res.json();
+          setBrainInsights(brain.insights || []);
+        }
+      } catch {}
+    })();
+  }, []);
+
+  const SUGGESTIONS = [
+    "What verticals should I focus on this week?",
+    "Debrief my recent calls — what patterns do you see?",
+    "DG forwarders in Antwerp are converting well. Should we adjust scoring?",
+    "Build a consequence chain for the current oil price movement",
+    "I think France is going to be huge for us",
+    "What's working and what's not in our cold outreach?",
+  ];
+
+  const sendMessage = async (text?: string) => {
+    const content = text || input.trim();
+    if (!content || loading) return;
+    setInput("");
+
+    const userMsg = { role: "user" as const, content, insights: [] as BrainInsightUI[] };
+    const updated = [...messages, userMsg];
+    setMessages(updated);
+    setLoading(true);
+
+    const assistantMsg = { role: "assistant" as const, content: "", insights: [] as BrainInsightUI[] };
+    setMessages([...updated, assistantMsg]);
+
+    try {
+      // Build message history for API (only role + content)
+      const apiMessages = [...updated].map(m => ({ role: m.role, content: m.content }));
+
+      const res = await fetch("/api/agent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: apiMessages, mode: "chat" }),
+      });
+
+      if (!res.ok) {
+        setMessages(prev => {
+          const copy = [...prev];
+          copy[copy.length - 1] = { role: "assistant", content: "Failed to connect. Check API key.", insights: [] };
+          return copy;
+        });
+        setLoading(false);
+        return;
+      }
+
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let accumulated = "";
+      const sessionInsights: BrainInsightUI[] = [];
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (line.startsWith("event: ")) {
+            // SSE event type — store for next data line
+            continue;
+          }
+          if (line.startsWith("data: ")) {
+            const raw = line.slice(6);
+            try {
+              const parsed = JSON.parse(raw);
+              if (parsed.message && !parsed.text && !parsed.id) {
+                // Error event
+                accumulated = `Error: ${parsed.message}`;
+                setMessages(prev => {
+                  const copy = [...prev];
+                  copy[copy.length - 1] = { role: "assistant", content: accumulated, insights: [] };
+                  return copy;
+                });
+              } else if (parsed.text !== undefined) {
+                // Text chunk
+                accumulated += parsed.text;
+                setMessages(prev => {
+                  const copy = [...prev];
+                  copy[copy.length - 1] = { role: "assistant", content: accumulated, insights: [...sessionInsights] };
+                  return copy;
+                });
+              } else if (parsed.id && parsed.type) {
+                // Brain insight
+                sessionInsights.push(parsed);
+                setBrainInsights(prev => [...prev, parsed]);
+                setMessages(prev => {
+                  const copy = [...prev];
+                  copy[copy.length - 1] = { ...copy[copy.length - 1], insights: [...sessionInsights] };
+                  return copy;
+                });
+              }
+            } catch {}
+          }
+        }
+      }
+    } catch {
+      setMessages(prev => {
+        const copy = [...prev];
+        copy[copy.length - 1] = { role: "assistant", content: "Connection error. Please try again.", insights: [] };
+        return copy;
+      });
+    }
+    setLoading(false);
+    setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
+  };
+
+  const handleDeleteInsight = async (id: string) => {
+    try {
+      await fetch("/api/brain", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      setBrainInsights(prev => prev.filter(i => i.id !== id));
+    } catch {}
+  };
+
+  const handleToggleInsight = async (id: string, active: boolean) => {
+    try {
+      await fetch("/api/brain", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, active }),
+      });
+      setBrainInsights(prev => prev.map(i => i.id === id ? { ...i, active } : i));
+    } catch {}
+  };
+
+  // Simple markdown rendering (reuse pattern from AgentView)
+  const renderText = (text: string) => {
+    return text.split("\n").map((line, i) => {
+      if (line.startsWith("## ")) return <h3 key={i} className="text-sm font-bold mt-3 mb-1">{line.slice(3)}</h3>;
+      if (line.startsWith("### ")) return <h4 key={i} className="text-xs font-bold mt-2 mb-1 text-flyfx-gold">{line.slice(4)}</h4>;
+      if (line.startsWith("**") && line.endsWith("**")) return <p key={i} className="text-xs font-bold mt-1">{line.slice(2, -2)}</p>;
+      if (line.startsWith("- ")) return <p key={i} className="text-xs text-flyfx-muted ml-3">{line}</p>;
+      if (line.match(/^\d+\. /)) return <p key={i} className="text-xs text-flyfx-muted ml-3">{line}</p>;
+      if (line.trim() === "") return <br key={i} />;
+      const parts = line.split(/(\*\*[^*]+\*\*)/g);
+      return (
+        <p key={i} className="text-xs leading-relaxed">
+          {parts.map((part, j) =>
+            part.startsWith("**") && part.endsWith("**")
+              ? <strong key={j} className="font-semibold text-white">{part.slice(2, -2)}</strong>
+              : part
+          )}
+        </p>
+      );
+    });
+  };
+
+  const activeInsights = brainInsights.filter(i => i.active);
+
+  return (
+    <div className="flex gap-4" style={{ height: "calc(100vh - 130px)" }}>
+      {/* Main chat area */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Chat messages */}
+        <div className="flex-1 overflow-y-auto space-y-3 pb-4">
+          {messages.length === 0 && (
+            <div className="text-center py-12 space-y-6">
+              <div>
+                <h2 className="text-lg font-bold">FlyFX Intelligence Partner</h2>
+                <p className="text-flyfx-muted text-xs mt-1">
+                  Your sparring partner for market strategy, call debriefs, and pipeline tuning.
+                  Insights from conversations feed directly into the deals machine.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-lg mx-auto">
+                {SUGGESTIONS.map((s, i) => (
+                  <button key={i} onClick={() => sendMessage(s)}
+                    className="text-left px-3 py-2.5 bg-flyfx-card border border-flyfx-border rounded-lg text-xs text-flyfx-muted hover:text-white hover:border-flyfx-gold/40 transition">
+                    {s}
+                  </button>
+                ))}
+              </div>
+              {activeInsights.length > 0 && (
+                <p className="text-[10px] text-flyfx-muted">
+                  {activeInsights.length} active brain insight{activeInsights.length !== 1 ? "s" : ""} modifying the pipeline
+                </p>
+              )}
+            </div>
+          )}
+          {messages.map((msg, i) => (
+            <div key={i}>
+              <div className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                <div className={`max-w-[85%] px-3 py-2.5 rounded-xl ${
+                  msg.role === "user"
+                    ? "bg-flyfx-gold/20 border border-flyfx-gold/30"
+                    : "bg-flyfx-card border border-flyfx-border"
+                }`}>
+                  {msg.role === "user"
+                    ? <p className="text-xs leading-relaxed">{msg.content}</p>
+                    : <div className="text-flyfx-muted">{msg.content ? renderText(msg.content) : <span className="text-xs animate-pulse">Thinking...</span>}</div>
+                  }
+                </div>
+              </div>
+              {/* Insight cards after assistant messages */}
+              {msg.role === "assistant" && msg.insights && msg.insights.length > 0 && (
+                <div className="ml-0 mt-2 space-y-1.5 max-w-[85%]">
+                  {msg.insights.map((ins) => (
+                    <InsightCard
+                      key={ins.id}
+                      insight={ins}
+                      onDelete={handleDeleteInsight}
+                      onToggle={handleToggleInsight}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+          <div ref={chatEndRef} />
+        </div>
+
+        {/* Input */}
+        <div className="border-t border-flyfx-border pt-3 pb-2">
+          <div className="flex gap-2">
+            <input value={input} onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && !loading && sendMessage()}
+              placeholder="Ask about the market, debrief a call, adjust the pipeline..."
+              className="flex-1 px-3 py-2.5 bg-flyfx-card border border-flyfx-border rounded-lg text-xs text-white outline-none focus:border-flyfx-gold transition" />
+            <button onClick={() => sendMessage()} disabled={loading || !input.trim()}
+              className="px-4 py-2.5 bg-flyfx-gold text-black rounded-lg text-xs font-semibold hover:opacity-90 transition disabled:opacity-50">
+              {loading ? "..." : "Send"}
+            </button>
+          </div>
+          <div className="flex items-center gap-3 mt-1.5">
+            {messages.length > 0 && (
+              <button onClick={() => setMessages([])} className="text-[10px] text-flyfx-muted hover:text-white transition">
+                Clear conversation
+              </button>
+            )}
+            <button
+              onClick={() => setShowBrain(!showBrain)}
+              className="text-[10px] text-flyfx-muted hover:text-flyfx-gold transition ml-auto"
+            >
+              Brain ({activeInsights.length}) {showBrain ? "▼" : "▶"}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Brain sidebar (collapsible) */}
+      {showBrain && (
+        <div className="w-72 shrink-0 border-l border-flyfx-border pl-4 overflow-y-auto">
+          <h3 className="text-xs font-bold mb-2 flex items-center gap-1.5">
+            <span className="text-flyfx-gold">Brain</span>
+            <span className="text-flyfx-muted font-normal">({activeInsights.length} active)</span>
+          </h3>
+          {brainInsights.length === 0 ? (
+            <p className="text-[10px] text-flyfx-muted">No insights yet. Chat about the market to build up the brain.</p>
+          ) : (
+            <div className="space-y-2">
+              {brainInsights.map((ins) => (
+                <InsightCard
+                  key={ins.id}
+                  insight={ins}
+                  onDelete={handleDeleteInsight}
+                  onToggle={handleToggleInsight}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── ANALYTICS VIEW ──────────────────────────────────────────
+// ══════════════════════════════════════════════════════════
+// MONTHLY PROGRESS BAR
+// ══════════════════════════════════════════════════════════
+function ProgressBar() {
+  // Verified from HubSpot API — 37 contacts owned by Kyle (owner 32686904)
+  const count = 37;
+  const target = 100;
+  const month = new Date().toLocaleString("en-GB", { month: "long", year: "numeric" });
+  const pct = Math.min(Math.round((count / target) * 100), 100);
+
+  return (
+    <div className="bg-flyfx-card border border-flyfx-border rounded-lg p-3">
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-xs font-medium text-white">{month} — {count}/{target} contacts in HubSpot</span>
+        <span className="text-xs font-bold text-flyfx-gold">{pct}%</span>
+      </div>
+      <div className="w-full bg-flyfx-border rounded-full h-2">
+        <div
+          className="bg-flyfx-gold h-2 rounded-full transition-all duration-500"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════
+// CONTACTS CRM VIEW
+// ══════════════════════════════════════════════════════════
+function ContactsView({ liveStatuses }: { liveStatuses?: Record<string, any> }) {
+  const [baseContacts, setBaseContacts] = useState<any[]>([]);
+  const [stats, setContactStats] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState<any>(null);
+  const [filter, setFilter] = useState<string>("all");
+  const [ownerFilter, setOwnerFilter] = useState<"all" | "kyle" | "gus">("all");
+  const [search, setSearch] = useState("");
+  const [sortBy, setSortBy] = useState<"dateAdded" | "company" | "country" | "status" | "owner">("dateAdded");
+  const [editingNotes, setEditingNotes] = useState(false);
+  const [notesText, setNotesText] = useState("");
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "failed">("idle");
+  const [localStatusOverrides, setLocalStatusOverrides] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    setLoading(true);
+    fetch("/api/contacts")
+      .then((r) => r.json())
+      .then((data) => {
+        const arr = Object.values(data.contacts || {}) as any[];
+        setBaseContacts(arr);
+        setContactStats(data.stats);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, []);
+
+  // Merge live statuses from Daily tab into contacts
+  const contacts = baseContacts.map((c) => {
+    const key = `${c.name}__${c.company}`;
+    // Local overrides take priority (from Contacts tab actions)
+    if (localStatusOverrides[c.id]) {
+      return { ...c, status: localStatusOverrides[c.id] };
+    }
+    // Then check live statuses from Daily tab
+    if (liveStatuses?.[key]?.status) {
+      return { ...c, status: liveStatuses[key].status };
+    }
+    return c;
+  });
+
+  const filtered = contacts
+    .filter((c) => {
+      if (filter === "all") return c.status !== "deleted";
+      return c.status === filter;
+    })
+    .filter((c) => {
+      if (ownerFilter === "all") return true;
+      return c.assignedTo === ownerFilter || (ownerFilter === "gus" && c.assignedTo === "shared");
+    })
+    .filter((c) => {
+      if (!search) return true;
+      const q = search.toLowerCase();
+      return (
+        (c.name || "").toLowerCase().includes(q) ||
+        (c.company || "").toLowerCase().includes(q) ||
+        (c.city || "").toLowerCase().includes(q)
+      );
+    })
+    .sort((a, b) => {
+      if (sortBy === "dateAdded") return (b.dateAdded || "").localeCompare(a.dateAdded || "");
+      if (sortBy === "company") return (a.company || "").localeCompare(b.company || "");
+      if (sortBy === "country") return (a.country || "").localeCompare(b.country || "");
+      if (sortBy === "status") return (a.status || "").localeCompare(b.status || "");
+      if (sortBy === "owner") return (a.assignedTo || "").localeCompare(b.assignedTo || "");
+      return 0;
+    });
+
+  const statusColors: Record<string, string> = {
+    new: "bg-blue-500/20 text-blue-400",
+    called: "bg-yellow-500/20 text-yellow-400",
+    negative: "bg-red-500/20 text-red-400",
+    callback_later: "bg-orange-500/20 text-orange-400",
+    they_callback: "bg-green-500/20 text-green-400",
+    follow_up_email: "bg-purple-500/20 text-purple-400",
+    gatekeeper: "bg-gray-500/20 text-gray-400",
+    imported: "bg-emerald-500/20 text-emerald-400",
+    existing_hubspot: "bg-gray-600/20 text-gray-500",
+    deleted: "bg-red-900/20 text-red-600",
+  };
+
+  const statusLabels: Record<string, string> = {
+    new: "New", called: "Called", negative: "Negative",
+    callback_later: "Callback", they_callback: "They Callback",
+    follow_up_email: "Follow Up", gatekeeper: "Gatekeeper",
+    imported: "In HubSpot", existing_hubspot: "Existing HS", deleted: "Deleted",
+  };
+
+  async function updateStatus(contact: any, newStatus: string) {
+    setSaveStatus("saving");
+    // Build a deal-shaped object that /api/status expects
+    const deal = {
+      name: contact.name,
+      company: contact.company,
+      title: contact.title || "",
+      email: contact.email || null,
+      phone: contact.phone || null,
+      linkedin: contact.linkedin || null,
+      domain: contact.domain || null,
+      city: contact.city || "",
+      country: contact.country || "",
+      specialisation: contact.specialisation || null,
+      apolloId: contact.apolloId || null,
+    };
+    try {
+      const res = await fetch("/api/status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ deal, status: newStatus }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSaveStatus("saved");
+        // Update local override so the UI reflects immediately
+        setLocalStatusOverrides((prev) => ({ ...prev, [contact.id]: newStatus }));
+        if (newStatus === "deleted") {
+          if (selected?.id === contact.id) setSelected(null);
+        } else {
+          if (selected?.id === contact.id) setSelected({ ...selected, status: newStatus });
+        }
+      } else {
+        setSaveStatus("failed");
+      }
+    } catch {
+      setSaveStatus("failed");
+    }
+    setTimeout(() => setSaveStatus("idle"), 3000);
+  }
+
+  async function saveNotes(contact: any) {
+    setSaveStatus("saving");
+    const deal = {
+      name: contact.name,
+      company: contact.company,
+      title: contact.title || "",
+      email: contact.email || null,
+      phone: contact.phone || null,
+      linkedin: contact.linkedin || null,
+      domain: contact.domain || null,
+      city: contact.city || "",
+      country: contact.country || "",
+      specialisation: contact.specialisation || null,
+      apolloId: contact.apolloId || null,
+    };
+    try {
+      const res = await fetch("/api/status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ deal, status: contact.status, notes: notesText }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSaveStatus("saved");
+        setBaseContacts((prev) =>
+          prev.map((c) => (c.id === contact.id ? { ...c, notes: notesText } : c))
+        );
+        if (selected?.id === contact.id) setSelected({ ...selected, notes: notesText });
+        setEditingNotes(false);
+      } else {
+        setSaveStatus("failed");
+      }
+    } catch {
+      setSaveStatus("failed");
+    }
+    setTimeout(() => setSaveStatus("idle"), 3000);
+  }
+
+  if (loading) {
+    return (
+      <div className="text-center py-20 text-flyfx-muted">
+        <div className="animate-spin text-3xl mb-4">&#x21BB;</div>
+        Loading contacts...
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {/* Save status indicator */}
+      {saveStatus !== "idle" && (
+        <div className={`fixed top-4 right-4 z-50 px-4 py-2 rounded-lg text-sm font-medium ${
+          saveStatus === "saving" ? "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30" :
+          saveStatus === "saved" ? "bg-green-500/20 text-green-400 border border-green-500/30" :
+          "bg-red-500/20 text-red-400 border border-red-500/30"
+        }`}>
+          {saveStatus === "saving" ? "Saving..." : saveStatus === "saved" ? "Saved" : "Save failed — try again"}
+        </div>
+      )}
+
+      {/* Stats bar — same verified numbers as Stats tab */}
+      <div className="grid grid-cols-4 gap-2">
+        {[
+          { l: "Calls Made", v: 106 },
+          { l: "In HubSpot", v: 37 },
+          { l: "Conversion", v: "35%" },
+          { l: "Remaining", v: 63 },
+        ].map((s) => (
+          <div key={s.l} className="bg-flyfx-card border border-flyfx-border rounded-lg p-2 text-center">
+            <div className="text-lg font-bold text-white">{s.v}</div>
+            <div className="text-[10px] text-flyfx-muted">{s.l}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          type="text"
+          placeholder="Search name or company..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="flex-1 min-w-[200px] px-3 py-1.5 bg-flyfx-card border border-flyfx-border rounded-lg text-sm text-white placeholder-flyfx-muted"
+        />
+        <select
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          className="px-2 py-1.5 bg-flyfx-card border border-flyfx-border rounded-lg text-xs text-white"
+        >
+          <option value="all">All Status</option>
+          {Object.entries(statusLabels).map(([k, v]) => (
+            <option key={k} value={k}>{v}</option>
+          ))}
+        </select>
+        <select
+          value={ownerFilter}
+          onChange={(e) => setOwnerFilter(e.target.value as any)}
+          className="px-2 py-1.5 bg-flyfx-card border border-flyfx-border rounded-lg text-xs text-white"
+        >
+          <option value="all">All Owners</option>
+          <option value="kyle">Kyle</option>
+          <option value="gus">Gus</option>
+        </select>
+        <select
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value as any)}
+          className="px-2 py-1.5 bg-flyfx-card border border-flyfx-border rounded-lg text-xs text-white"
+        >
+          <option value="dateAdded">Newest</option>
+          <option value="company">Company</option>
+          <option value="country">Country</option>
+          <option value="status">Status</option>
+          <option value="owner">Owner</option>
+        </select>
+      </div>
+
+      <div className="text-xs text-flyfx-muted">{filtered.length} contacts</div>
+
+      {/* Contact list + detail */}
+      <div className="space-y-2">
+        {filtered.map((c) => {
+          const isActioned = c.status !== "new";
+          return (
+          <div
+            key={c.id}
+            className={`border rounded-lg transition cursor-pointer ${
+              selected?.id === c.id
+                ? "border-flyfx-gold bg-flyfx-card"
+                : isActioned
+                ? "border-flyfx-border/50 bg-flyfx-card/40 opacity-60"
+                : "border-flyfx-border bg-flyfx-card hover:border-flyfx-gold/40"
+            }`}
+          >
+            {/* Summary row */}
+            <div
+              onClick={() => {
+                setSelected(selected?.id === c.id ? null : c);
+                setNotesText(c.notes || "");
+                setEditingNotes(false);
+              }}
+              className="flex items-center gap-3 p-3"
+            >
+              {/* Kyle/Gus badge */}
+              {c.assignedTo && (
+                <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold flex-shrink-0 ${
+                  c.assignedTo === "kyle" ? "bg-blue-500/20 text-blue-400" : "bg-purple-500/20 text-purple-400"
+                }`}>
+                  {c.assignedTo === "kyle" ? "K" : "G"}
+                </span>
+              )}
+              <div className="flex-1 min-w-0">
+                <div className={`text-sm font-medium truncate ${isActioned ? "text-white/60" : "text-white"}`}>{c.name}</div>
+                <div className="text-xs text-flyfx-muted truncate">{c.title} at {c.company}</div>
+              </div>
+              <div className="text-xs text-flyfx-muted hidden sm:block">{c.city}, {c.country}</div>
+              <span className={`text-[10px] px-2 py-0.5 rounded-full ${statusColors[c.status] || "bg-gray-500/20 text-gray-400"}`}>
+                {statusLabels[c.status] || c.status}
+              </span>
+            </div>
+
+            {/* Expanded detail */}
+            {selected?.id === c.id && (
+              <div className="border-t border-flyfx-border p-3 space-y-3">
+                {/* Contact info */}
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  {c.phone && (
+                    <div>
+                      <span className="text-flyfx-muted">Phone: </span>
+                      <a href={`tel:${c.phone}`} className="text-flyfx-gold">{c.phone}</a>
+                    </div>
+                  )}
+                  {c.domain && (
+                    <div>
+                      <span className="text-flyfx-muted">Website: </span>
+                      <a href={`https://${c.domain}`} target="_blank" rel="noopener" className="text-blue-400 hover:underline">{c.domain}</a>
+                    </div>
+                  )}
+                  {c.linkedin && (
+                    <div>
+                      <span className="text-flyfx-muted">LinkedIn: </span>
+                      <a href={c.linkedin} target="_blank" rel="noopener" className="text-blue-400 hover:underline">Profile</a>
+                    </div>
+                  )}
+                  {c.email && (
+                    <div>
+                      <span className="text-flyfx-muted">Email: </span>
+                      <a href={`mailto:${c.email}`} className="text-blue-400">{c.email}</a>
+                    </div>
+                  )}
+                  {c.employees && (
+                    <div><span className="text-flyfx-muted">Size: </span><span className="text-white">{c.employees} staff</span></div>
+                  )}
+                  {c.specialisation && (
+                    <div><span className="text-flyfx-muted">Vertical: </span><span className="text-white">{c.specialisation}</span></div>
+                  )}
+                </div>
+
+                {/* Meta */}
+                <div className="flex flex-wrap gap-2 text-[10px] text-flyfx-muted">
+                  <span>Added: {c.dateAdded ? new Date(c.dateAdded).toLocaleDateString() : "—"}</span>
+                  <span>Source: {c.source || "—"}</span>
+                  <span>Assigned: {c.assignedTo || "—"}</span>
+                  {c.score && <span>Score: {c.score}/100</span>}
+                </div>
+
+                {/* Notes */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs text-flyfx-muted font-medium">Notes</span>
+                    {!editingNotes ? (
+                      <button
+                        onClick={() => { setEditingNotes(true); setNotesText(c.notes || ""); }}
+                        className="text-[10px] text-flyfx-gold hover:underline"
+                      >Edit</button>
+                    ) : (
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => saveNotes(c)}
+                          className="text-[10px] text-green-400 hover:underline"
+                        >Save</button>
+                        <button
+                          onClick={() => setEditingNotes(false)}
+                          className="text-[10px] text-flyfx-muted hover:underline"
+                        >Cancel</button>
+                      </div>
+                    )}
+                  </div>
+                  {editingNotes ? (
+                    <textarea
+                      value={notesText}
+                      onChange={(e) => setNotesText(e.target.value)}
+                      rows={3}
+                      className="w-full bg-black/30 border border-flyfx-border rounded-lg p-2 text-xs text-white placeholder-flyfx-muted"
+                      placeholder="Add notes about this contact..."
+                    />
+                  ) : (
+                    <div className="text-xs text-white/70 bg-black/20 rounded p-2 min-h-[40px]">
+                      {c.notes || <span className="text-flyfx-muted italic">No notes</span>}
+                    </div>
+                  )}
+                </div>
+
+                {/* Status actions */}
+                <div className="flex flex-wrap gap-1.5">
+                  {(["new", "called", "callback_later", "they_callback", "follow_up_email", "negative", "gatekeeper", "imported", "deleted"] as const).map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => updateStatus(c, s)}
+                      disabled={c.status === s}
+                      className={`text-[10px] px-2 py-1 rounded transition ${
+                        c.status === s
+                          ? "bg-flyfx-gold/20 text-flyfx-gold border border-flyfx-gold/40"
+                          : "bg-flyfx-card border border-flyfx-border text-flyfx-muted hover:text-white hover:border-flyfx-gold/30"
+                      }`}
+                    >
+                      {statusLabels[s]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          );
+        })}
+      </div>
+
+      {filtered.length === 0 && (
+        <div className="text-center py-10 text-flyfx-muted text-sm">
+          {contacts.length === 0
+            ? "No contacts yet. Run the pipeline to generate your first deals."
+            : "No contacts match your filters."}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AnalyticsView({
+  deals,
+  statuses,
+}: {
+  deals: Deal[] | undefined;
+  statuses: Record<string, any>;
+}) {
+  const [contactStats, setContactStats] = useState<any>(null);
+  const [allContacts, setAllContacts] = useState<any[]>([]);
+  const [poolStats, setPoolStats] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([
+      fetch("/api/contacts").then((r) => r.json()).catch(() => ({ contacts: {}, stats: {} })),
+      fetch("/api/source-leads").then((r) => r.json()).catch(() => ({})),
+    ]).then(([contactsData, poolData]) => {
+      setContactStats(contactsData.stats || {});
+      setAllContacts(Object.values(contactsData.contacts || {}));
+      setPoolStats(poolData);
+      setLoading(false);
+    });
+  }, []);
+
+  const month = new Date().toLocaleString("en-GB", { month: "long", year: "numeric" });
+
+  // Hard facts — verified by Kyle on 18 March 2026
+  const totalCalls = 106;       // unique phone numbers called (Granola, verified by Kyle)
+  const totalInHubSpot = 37;    // Kyle's contacts in HubSpot (HubSpot API, owner 32686904)
+  const conversionRate = totalCalls > 0 ? Math.round((totalInHubSpot / totalCalls) * 100) : 0;
+  const importedCount = contactStats?.byStatus?.imported || 0;
+  const byStatus = contactStats?.byStatus || {};
+  const byCountry = contactStats?.byCountry || {};
+  const byAssigned = contactStats?.byAssignedTo || { kyle: 0, gus: 0, shared: 0 };
+
+  // Top countries
+  const topCountries = Object.entries(byCountry)
+    .sort((a: any, b: any) => b[1] - a[1])
+    .slice(0, 8);
+  const maxCountryCount = topCountries.length > 0 ? (topCountries[0][1] as number) : 1;
+
+  // Status bars
+  const statusItems = [
+    { label: "New", key: "new", color: "bg-blue-500" },
+    { label: "Called", key: "called", color: "bg-flyfx-gold" },
+    { label: "Positive", key: "they_callback", color: "bg-green-500" },
+    { label: "Gatekeeper", key: "gatekeeper", color: "bg-red-500" },
+    { label: "Callback", key: "callback_later", color: "bg-amber-500" },
+    { label: "Follow-up", key: "follow_up_email", color: "bg-blue-400" },
+    { label: "Negative", key: "negative", color: "bg-red-400" },
+    { label: "In HubSpot", key: "imported", color: "bg-teal-500" },
+    { label: "Deleted", key: "deleted", color: "bg-gray-600" },
+  ];
+  const maxStatusCount = Math.max(...statusItems.map((s) => byStatus[s.key] || 0), 1);
+
+  function KpiCard({ label, value, sub, color }: { label: string; value: string | number; sub?: string; color?: string }) {
+    return (
+      <div className="bg-flyfx-card border border-flyfx-border rounded-xl p-3 flex flex-col gap-0.5">
+        <p className="text-[10px] text-flyfx-muted uppercase tracking-wider">{label}</p>
+        <p className={`text-2xl font-bold ${color || "text-white"}`}>{value}</p>
+        {sub && <p className="text-[10px] text-flyfx-muted">{sub}</p>}
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="text-center py-20 text-flyfx-muted">
+        <div className="animate-spin text-3xl mb-4">&#x21BB;</div>
+        Loading analytics...
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4 pb-8">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-sm font-semibold text-white">Analytics — All Time</h2>
+          <p className="text-[11px] text-flyfx-muted mt-0.5">{month} · {totalCalls} calls · {totalInHubSpot} in HubSpot</p>
+        </div>
+        {poolStats?.poolSize > 0 && (
+          <div className="text-right">
+            <p className="text-xs text-flyfx-gold font-semibold">{poolStats.uncalled || 0} in pool</p>
+            <p className="text-[10px] text-flyfx-muted">{poolStats.poolSize} total sourced</p>
+          </div>
+        )}
+      </div>
+
+      {/* KPI grid */}
+      <div className="grid grid-cols-3 gap-2">
+        <KpiCard label="Calls Made" value={totalCalls} sub="unique contacts" />
+        <KpiCard label="In HubSpot" value={totalInHubSpot} color="text-teal-400" sub="of 100 target" />
+        <KpiCard
+          label="Conversion"
+          value={`${conversionRate}%`}
+          sub={`${totalInHubSpot} / ${totalCalls}`}
+          color={conversionRate >= 30 ? "text-green-400" : conversionRate >= 15 ? "text-amber-400" : "text-flyfx-muted"}
+        />
+        <KpiCard label="Remaining" value={100 - totalInHubSpot} sub="to hit 100" color="text-flyfx-gold" />
+        <KpiCard label="Calls Needed" value={Math.ceil((100 - totalInHubSpot) / (conversionRate / 100))} sub={`at ${conversionRate}% rate`} color="text-amber-400" />
+        <KpiCard label="Lead Pool" value={poolStats?.uncalled || 0} sub="uncalled" color="text-flyfx-muted" />
+      </div>
+
+      {/* Monthly Progress */}
+      <div className="bg-flyfx-card border border-flyfx-border rounded-xl p-4">
+        <p className="text-[10px] text-flyfx-muted uppercase tracking-wider font-semibold mb-2">{month} — Sprint to 100</p>
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-xs text-white">{totalInHubSpot} / 100 contacts in HubSpot</span>
+          <span className="text-xs font-bold text-flyfx-gold">{totalInHubSpot}%</span>
+        </div>
+        <div className="w-full bg-flyfx-dark rounded-full h-3 overflow-hidden">
+          <div className="bg-flyfx-gold h-3 rounded-full transition-all" style={{ width: `${totalInHubSpot}%` }} />
+        </div>
+      </div>
+
+      {/* Call Funnel */}
+      <div className="bg-flyfx-card border border-flyfx-border rounded-xl p-4 space-y-3">
+        <p className="text-[10px] text-flyfx-muted uppercase tracking-wider font-semibold">Call Funnel</p>
+        {[
+          { label: "Calls made", value: totalCalls, max: totalCalls, color: "bg-flyfx-border" },
+          { label: "In HubSpot", value: totalInHubSpot, max: totalCalls, color: "bg-flyfx-gold" },
+        ].map(({ label, value, max, color }) => (
+          <div key={label} className="space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-flyfx-muted">{label}</span>
+              <span className="text-xs font-semibold text-white">{value}</span>
+            </div>
+            <div className="w-full bg-flyfx-dark rounded-full h-2 overflow-hidden">
+              <div className={`h-full rounded-full ${color} transition-all`} style={{ width: `${(value / max) * 100}%` }} />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Status breakdown + Contacts by Country */}
+      <div className="grid grid-cols-2 gap-3">
+        {/* Status breakdown */}
+        <div className="bg-flyfx-card border border-flyfx-border rounded-xl p-4 space-y-2">
+          <p className="text-[10px] text-flyfx-muted uppercase tracking-wider font-semibold">Status Breakdown</p>
+          {statusItems.map(({ label, key, color }) => {
+            const val = byStatus[key] || 0;
+            return (
+              <div key={key} className="flex items-center gap-2">
+                <span className="text-[10px] text-flyfx-muted w-16 flex-shrink-0">{label}</span>
+                <div className="flex-1 bg-flyfx-dark rounded-full h-1.5 overflow-hidden">
+                  <div className={`h-full rounded-full ${color} transition-all`} style={{ width: `${Math.max((val / maxStatusCount) * 100, val > 0 ? 4 : 0)}%` }} />
+                </div>
+                <span className="text-[10px] text-white w-4 text-right">{val}</span>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Contacts by country */}
+        <div className="bg-flyfx-card border border-flyfx-border rounded-xl p-4 space-y-2">
+          <p className="text-[10px] text-flyfx-muted uppercase tracking-wider font-semibold">By Country</p>
+          {topCountries.length > 0 ? topCountries.map(([country, count]) => (
+            <div key={country} className="flex items-center gap-2">
+              <span className="text-[10px] text-flyfx-muted w-20 flex-shrink-0 truncate">{country}</span>
+              <div className="flex-1 bg-flyfx-dark rounded-full h-1.5 overflow-hidden">
+                <div className="h-full rounded-full bg-flyfx-gold transition-all" style={{ width: `${((count as number) / maxCountryCount) * 100}%` }} />
+              </div>
+              <span className="text-[10px] text-white w-4 text-right">{count as number}</span>
+            </div>
+          )) : (
+            <p className="text-[10px] text-flyfx-muted">No country data yet</p>
+          )}
+        </div>
+      </div>
+
+      {/* Kyle vs Gus */}
+      <div className="bg-flyfx-card border border-flyfx-border rounded-xl p-4">
+        <p className="text-[10px] text-flyfx-muted uppercase tracking-wider font-semibold mb-3">Kyle vs Gus — All Time</p>
+        <div className="grid grid-cols-2 gap-4">
+          {[
+            { name: "Kyle", count: byAssigned.kyle, color: "text-blue-400", bar: "bg-blue-500" },
+            { name: "Gus", count: byAssigned.gus + byAssigned.shared, color: "text-purple-400", bar: "bg-purple-500" },
+          ].map(({ name, count: c, color, bar }) => (
+            <div key={name} className="space-y-2">
+              <p className={`text-sm font-semibold ${color}`}>{name}</p>
+              <p className="text-2xl font-bold text-white">{c}</p>
+              <p className="text-[10px] text-flyfx-muted">contacts assigned</p>
+              <div className="w-full bg-flyfx-dark rounded-full h-2 overflow-hidden">
+                <div className={`h-full rounded-full ${bar}`} style={{ width: totalCalls > 0 ? `${(c / totalCalls) * 100}%` : "0%" }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Empty state */}
+      {totalCalls < 1 && (
+        <div className="text-center py-12 text-flyfx-muted">
+          <p className="text-4xl mb-3 opacity-30">&#x1F4CA;</p>
+          <p className="text-sm">No contacts yet.</p>
+          <p className="text-xs mt-1">Run the pipeline to source your first leads.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── PERSISTENCE HELPERS ─────────────────────────────────────
+const DEALS_CACHE_KEY = "flyfx_deals_v2";
+const FILTERS_KEY = "flyfx_filters_v1";
+
+function readLocalStorage<T>(key: string): T | null {
+  if (typeof window === "undefined") return null;
+  try { return JSON.parse(localStorage.getItem(key) || "null"); } catch { return null; }
+}
+function writeLocalStorage(key: string, val: unknown) {
+  if (typeof window === "undefined") return;
+  try { localStorage.setItem(key, JSON.stringify(val)); } catch {}
+}
+
 // ─── MAIN APP ────────────────────────────────────────────────
 export default function Home() {
   const [authed, setAuthed] = useState(false);
-  const [data, setData] = useState<DailyData | null>(null);
-  const [expandedCard, setExpandedCard] = useState<number | null>(null);
+  const [darkMode, setDarkMode] = useState(false);
+  const [data, setData] = useState<DailyData | null>(() => readLocalStorage<DailyData>(DEALS_CACHE_KEY));
+
+  // Apply dark mode class to html element
+  useEffect(() => {
+    const saved = localStorage.getItem("flyfx_dark_mode");
+    if (saved === "true") { setDarkMode(true); document.documentElement.classList.add("dark"); }
+  }, []);
+  useEffect(() => {
+    if (darkMode) { document.documentElement.classList.add("dark"); } else { document.documentElement.classList.remove("dark"); }
+    localStorage.setItem("flyfx_dark_mode", String(darkMode));
+  }, [darkMode]);
+  const [expandedCard, setExpandedCard] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [banner, setBanner] = useState<string | null>(null);
-  const [filter, setFilter] = useState<"all" | "call" | "email">("all");
-  const [personFilter, setPersonFilter] = useState<"all" | "kyle" | "gus">("all");
-  const [statusFilter, setStatusFilter] = useState<"to_call" | "called" | "callback" | "imported" | "deleted">("to_call");
+
+  // Filters — restored from localStorage
+  const savedFilters = readLocalStorage<{ filter: string; personFilter: string; statusFilter: string }>(FILTERS_KEY);
+  const [filter, setFilter] = useState<"all" | "call" | "email">((savedFilters?.filter as any) || "all");
+  const [personFilter, setPersonFilter] = useState<"all" | "kyle" | "gus">((savedFilters?.personFilter as any) || "all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "to_call" | "completed" | "callback" | "follow_up">((savedFilters?.statusFilter as any) || "all");
+  const [bulkPushing, setBulkPushing] = useState(false);
+
+  const [lastActionedDeal, setLastActionedDeal] = useState<{ deal: Deal; outcome: "positive" | "negative" } | null>(null);
   const [searchFilter, setSearchFilter] = useState("");
   const [statuses, setStatuses] = useState<Record<string, DealStatus>>({});
+  const [rawStatuses, setRawStatuses] = useState<Record<string, any>>({});
+  const [statusByApolloId, setStatusByApolloId] = useState<Record<string, DealStatus>>({});
   const [importingKey, setImportingKey] = useState<string | null>(null);
-  const [appTab, setAppTab] = useState<"daily" | "live" | "coach" | "agent" | "pipeline" | "granola">("daily");
+  const [appTab, setAppTab] = useState<"daily" | "pipeline" | "analytics" | "contacts" | "chat">("daily");
+  const [contactsRefreshKey, setContactsRefreshKey] = useState(0);
+
+  // Persist filter changes
+  useEffect(() => {
+    writeLocalStorage(FILTERS_KEY, { filter, personFilter, statusFilter });
+  }, [filter, personFilter, statusFilter]);
 
   // Check session auth
   useEffect(() => {
@@ -2229,10 +3590,39 @@ export default function Home() {
     }
   }, []);
 
-  // Try to load daily data on mount
+  // On auth: always reload statuses; only fetch deals if cache is stale (different date than today)
   useEffect(() => {
-    if (authed) fetchDaily();
+    if (!authed) return;
+    const today = new Date().toISOString().split("T")[0];
+    const cachedDate = readLocalStorage<DailyData>(DEALS_CACHE_KEY)?.date;
+    if (cachedDate === today) {
+      // Cache is today's data — just refresh statuses silently
+      loadStatuses();
+    } else {
+      // Cache is stale or empty — fetch everything
+      fetchDaily();
+    }
   }, [authed]);
+
+  const loadStatuses = useCallback(async () => {
+    try {
+      const sRes = await fetch("/api/status");
+      if (sRes.ok) {
+        const sJson = await sRes.json();
+        const loaded: Record<string, DealStatus> = {};
+        const loadedByApolloId: Record<string, DealStatus> = {};
+        for (const [key, val] of Object.entries(sJson.statuses || {})) {
+          loaded[key] = (val as any).status;
+          if ((val as any).apolloId) {
+            loadedByApolloId[(val as any).apolloId] = (val as any).status;
+          }
+        }
+        setStatuses(loaded);
+        setRawStatuses(sJson.statuses || {});
+        setStatusByApolloId(loadedByApolloId);
+      }
+    } catch {}
+  }, []);
 
   const fetchDaily = useCallback(async () => {
     setLoading(true);
@@ -2244,6 +3634,7 @@ export default function Home() {
         const json = await res.json();
         if (json.data && json.data.deals && json.data.deals.length > 0) {
           setData(json.data);
+          writeLocalStorage(DEALS_CACHE_KEY, json.data);
           setBanner("Daily intelligence loaded");
           setTimeout(() => setBanner(null), 4000);
           loaded = true;
@@ -2258,6 +3649,7 @@ export default function Home() {
           const json = await res.json();
           if (json && json.deals) {
             setData(json);
+            writeLocalStorage(DEALS_CACHE_KEY, json);
             setBanner("Daily intelligence loaded (static)");
             setTimeout(() => setBanner(null), 4000);
           }
@@ -2265,23 +3657,54 @@ export default function Home() {
       } catch {}
     }
     // Load saved statuses
-    try {
-      const sRes = await fetch("/api/status");
-      if (sRes.ok) {
-        const sJson = await sRes.json();
-        const loaded: Record<string, DealStatus> = {};
-        for (const [key, val] of Object.entries(sJson.statuses || {})) {
-          loaded[key] = (val as any).status;
-        }
-        setStatuses(loaded);
-      }
-    } catch {}
+    await loadStatuses();
     setLoading(false);
-  }, []);
+  }, [loadStatuses]);
 
   const handleStatusChange = useCallback(async (deal: Deal, newStatus: DealStatus) => {
     const key = `${deal.name}__${deal.company}`;
     setStatuses((prev) => ({ ...prev, [key]: newStatus }));
+    setRawStatuses((prev) => ({
+      ...prev,
+      [key]: {
+        ...(prev[key] || {}),
+        status: newStatus,
+        updatedAt: new Date().toISOString(),
+        name: deal.name,
+        company: deal.company,
+        title: deal.title,
+        city: deal.city,
+        country: deal.country,
+        specialisation: deal.specialisation,
+      },
+    }));
+    if (deal.apolloId) {
+      setStatusByApolloId((prev) => ({ ...prev, [deal.apolloId!]: newStatus }));
+    }
+
+    // When marking a meaningful outcome, set lastActionedDeal so the Calls tab
+    // can pre-select this contact for Granola transcript analysis.
+    if (newStatus === "they_callback" || newStatus === "deleted") {
+      setLastActionedDeal({
+        deal,
+        outcome: newStatus === "they_callback" ? "positive" : "negative",
+      });
+
+      // Fire-and-forget: log the outcome to memory for AI training
+      fetch("/api/memory", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "log_outcome",
+          contactName: deal.name,
+          company: deal.company,
+          outcome: newStatus === "they_callback" ? "positive" : "rejection",
+          notes: `${deal.whyToday || ""} Vertical: ${deal.specialisation || ""}`.trim(),
+          angle: deal.leadDifferentiator || null,
+          addedBy: deal.assignedTo === "gus" ? "Gus" : "Kyle",
+        }),
+      }).catch(() => {});
+    }
 
     try {
       await fetch("/api/status", {
@@ -2292,17 +3715,45 @@ export default function Home() {
       const labels: Record<DealStatus, string> = {
         new: "Restored",
         called: "Marked as called",
+        negative: "Negative — completed",
         callback_later: "Call back later",
-        they_callback: "They'll call us",
+        they_callback: "Positive — go to Calls tab to add transcript",
         imported: "Imported to HubSpot",
-        deleted: "Deleted",
+        gatekeeper: "Logged as gatekeeper",
+        follow_up_email: "Marked for follow-up email",
+        existing_hubspot: "Flagged — company added to exclusion list",
+        deleted: "Deleted — go to Calls tab to add transcript",
       };
       setBanner(`${deal.name} — ${labels[newStatus]}`);
-      setTimeout(() => setBanner(null), 3000);
+      setTimeout(() => setBanner(null), 5000);
+      // Trigger contacts tab refresh on next visit
+      setContactsRefreshKey((prev) => prev + 1);
     } catch {
       setBanner("Failed to update status");
       setTimeout(() => setBanner(null), 3000);
     }
+  }, []);
+
+  const handleDealEdit = useCallback((deal: Deal, fields: Partial<Deal>) => {
+    // Update the deal in the data state
+    setData((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        deals: prev.deals.map((d) =>
+          d.name === deal.name && d.company === deal.company ? { ...d, ...fields } : d
+        ),
+      };
+    });
+    // Persist edited fields via status API
+    const updatedDeal = { ...deal, ...fields };
+    fetch("/api/status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ deal: updatedDeal, status: "new", notes: "Contact details edited" }),
+    }).catch(() => {});
+    setBanner(`${fields.name || deal.name} — details updated`);
+    setTimeout(() => setBanner(null), 3000);
   }, []);
 
   const handleHubSpotImport = useCallback(async (deal: Deal) => {
@@ -2319,10 +3770,18 @@ export default function Home() {
 
       if (json.success) {
         setStatuses((prev) => ({ ...prev, [key]: "imported" }));
+        if (deal.apolloId) {
+          setStatusByApolloId((prev) => ({ ...prev, [deal.apolloId!]: "imported" }));
+        }
+        const hubspotLink = json.hubspotUrl ? ` — <a href="${json.hubspotUrl}" target="_blank" class="underline">View in HubSpot</a>` : "";
         setBanner(json.alreadyExisted
           ? `${deal.name} — already in HubSpot`
-          : `${deal.name} — imported to HubSpot`
+          : `${deal.name} — imported to HubSpot (Owner: Kyle Dow)${json.hubspotUrl ? " ✓" : ""}`
         );
+        // Open HubSpot URL if available
+        if (json.hubspotUrl && !json.alreadyExisted) {
+          window.open(json.hubspotUrl, "_blank");
+        }
       } else {
         setBanner(`Import failed: ${json.error}`);
       }
@@ -2333,6 +3792,40 @@ export default function Home() {
     } finally {
       setImportingKey(null);
     }
+  }, []);
+
+  // Bulk push all positive + follow-up deals to HubSpot
+  const handleBulkHubSpotPush = useCallback(async (deals: Deal[]) => {
+    if (!deals.length) return;
+    setBulkPushing(true);
+    setBanner(`Pushing ${deals.length} contact${deals.length > 1 ? "s" : ""} to HubSpot...`);
+    let succeeded = 0;
+    for (const deal of deals) {
+      try {
+        const res = await fetch("/api/hubspot", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ deal }),
+        });
+        const json = await res.json();
+        if (json.success) {
+          const key = `${deal.name}__${deal.company}`;
+          setStatuses((prev) => ({ ...prev, [key]: "imported" }));
+          if (deal.apolloId) {
+            setStatusByApolloId((prev) => ({ ...prev, [deal.apolloId!]: "imported" }));
+          }
+          await fetch("/api/status", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ deal, status: "imported" }),
+          });
+          succeeded++;
+        }
+      } catch {}
+    }
+    setBulkPushing(false);
+    setBanner(`${succeeded} of ${deals.length} contacts pushed to HubSpot`);
+    setTimeout(() => setBanner(null), 5000);
   }, []);
 
   // Handle JSON file upload
@@ -2349,6 +3842,7 @@ export default function Home() {
         body: JSON.stringify(json),
       });
       setData(json);
+      writeLocalStorage(DEALS_CACHE_KEY, json);
       setBanner("Deals loaded from file");
       setTimeout(() => setBanner(null), 4000);
     } catch {
@@ -2362,17 +3856,18 @@ export default function Home() {
 
   const getDealStatus = (d: Deal): DealStatus => {
     const key = `${d.name}__${d.company}`;
-    return statuses[key] || "new";
+    if (statuses[key]) return statuses[key];
+    if (d.apolloId && statusByApolloId[d.apolloId]) return statusByApolloId[d.apolloId];
+    return "new";
   };
 
   const filteredDeals = data?.deals.filter((d) => {
     // Status filter
     const s = getDealStatus(d);
     if (statusFilter === "to_call" && s !== "new") return false;
-    if (statusFilter === "called" && s !== "called") return false;
-    if (statusFilter === "callback" && s !== "callback_later" && s !== "they_callback") return false;
-    if (statusFilter === "imported" && s !== "imported") return false;
-    if (statusFilter === "deleted" && s !== "deleted") return false;
+    if (statusFilter === "completed" && s !== "called" && s !== "they_callback" && s !== "negative" && s !== "gatekeeper" && s !== "deleted" && s !== "imported" && s !== "existing_hubspot") return false;
+    if (statusFilter === "callback" && s !== "callback_later") return false;
+    if (statusFilter === "follow_up" && s !== "follow_up_email") return false;
 
     if (filter === "call" && !d.phone) return false;
     if (filter === "email" && d.phone) return false;
@@ -2388,30 +3883,34 @@ export default function Home() {
       );
     }
     return true;
-  });
+  }).sort((a, b) => a.rank - b.rank);
 
   const statusMatch = (d: Deal) => {
     const s = getDealStatus(d);
+    if (statusFilter === "all") return true;
     if (statusFilter === "to_call") return s === "new";
-    if (statusFilter === "called") return s === "called";
-    if (statusFilter === "callback") return s === "callback_later" || s === "they_callback";
-    if (statusFilter === "imported") return s === "imported";
-    if (statusFilter === "deleted") return s === "deleted";
+    if (statusFilter === "completed") return s === "called" || s === "they_callback" || s === "negative" || s === "gatekeeper" || s === "deleted" || s === "imported" || s === "existing_hubspot";
+    if (statusFilter === "callback") return s === "callback_later";
+    if (statusFilter === "follow_up") return s === "follow_up_email";
     return true;
   };
   const activeDeals = data?.deals.filter(statusMatch) ?? [];
   const toCallCount = data?.deals.filter((d) => getDealStatus(d) === "new").length ?? 0;
-  const calledCount = data?.deals.filter((d) => getDealStatus(d) === "called").length ?? 0;
-  const callbackCount = data?.deals.filter((d) => { const s = getDealStatus(d); return s === "callback_later" || s === "they_callback"; }).length ?? 0;
-  const importedCount = data?.deals.filter((d) => getDealStatus(d) === "imported").length ?? 0;
-  const deletedCount = data?.deals.filter((d) => getDealStatus(d) === "deleted").length ?? 0;
+  const completedCount = data?.deals.filter((d) => { const s = getDealStatus(d); return s === "called" || s === "they_callback" || s === "negative" || s === "gatekeeper" || s === "deleted" || s === "imported" || s === "existing_hubspot"; }).length ?? 0;
+  const callbackCount = data?.deals.filter((d) => getDealStatus(d) === "callback_later").length ?? 0;
+  const followUpCount = data?.deals.filter((d) => getDealStatus(d) === "follow_up_email").length ?? 0;
+  // Deals eligible for bulk HubSpot push: positive outcomes + follow-up emails
+  const pushableDeals = data?.deals.filter((d) => {
+    const s = getDealStatus(d);
+    return s === "they_callback" || s === "follow_up_email";
+  }) ?? [];
   const callCount = activeDeals.filter((d) => d.phone).length;
   const emailCount = activeDeals.filter((d) => !d.phone && d.email).length;
   const kyleCount = activeDeals.filter((d) => d.assignedTo === "kyle").length;
   const gusCount = activeDeals.filter((d) => d.assignedTo === "gus").length;
 
   return (
-    <div className="min-h-screen bg-flyfx-dark pb-20">
+    <div className="min-h-screen pb-20 theme-bg" style={{ background: `var(--bg)` }}>
       {/* Banner */}
       {banner && (
         <div className="bg-green-600 text-white text-center py-2 text-sm font-medium animate-pulse">
@@ -2420,63 +3919,72 @@ export default function Home() {
       )}
 
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-flyfx-dark/95 backdrop-blur border-b border-flyfx-border">
-        {/* Row 1: logo + actions */}
-        <div className="max-w-2xl mx-auto flex items-center justify-between px-4 pt-2.5 pb-2">
-          <div className="flex items-center gap-2">
-            <img src="/flyfxfreight-logo.svg" alt="FlyFXFreight" className="h-5" />
-            <span className="text-flyfx-muted text-xs hidden sm:inline">Deals Machine</span>
-            {data && (
-              <span className="text-[10px] text-flyfx-muted border border-flyfx-border rounded px-1.5 py-0.5 hidden sm:inline">
-                {data.date}
-              </span>
-            )}
+      <header className="sticky top-0 z-50 backdrop-blur-lg border-b" style={{ background: `var(--card)`, borderColor: `var(--border)` }}>
+        {/* Row 1: logo — title — actions */}
+        <div className="max-w-5xl mx-auto flex items-center justify-between px-4 pt-4 pb-3">
+          {/* Left: Logo */}
+          <div className="flex items-center w-40">
+            <img src={darkMode ? "/flyfxfreight-logo.svg" : "/flyfxfreight-logo-dark.svg"} alt="FlyFXFreight" className="h-7" />
           </div>
-          <div className="flex items-center gap-1.5">
-            {/* Run pipeline — always visible */}
+
+          {/* Center: Title */}
+          <div className="text-center">
+            <h1 className="text-base font-bold tracking-wide" style={{ color: `var(--text)` }}>Deals Machine</h1>
+          </div>
+
+          {/* Right: Actions */}
+          <div className="flex items-center gap-2 w-40 justify-end">
+            {/* Theme toggle */}
             <button
-              onClick={() => setAppTab("pipeline")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition ${
-                appTab === "pipeline"
-                  ? "bg-flyfx-gold text-black"
-                  : "bg-flyfx-gold/15 border border-flyfx-gold/40 text-flyfx-gold hover:bg-flyfx-gold/25"
-              }`}
+              onClick={() => setDarkMode(!darkMode)}
+              title={darkMode ? "Light mode" : "Dark mode"}
+              className="flex items-center justify-center w-8 h-8 rounded-lg border transition text-sm font-medium"
+              style={{ background: `var(--subtle)`, borderColor: `var(--border)`, color: `var(--text)` }}
             >
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
-              Run
+              {darkMode ? "☀" : "☾"}
             </button>
             {/* Upload JSON */}
-            <label className="cursor-pointer flex items-center justify-center w-7 h-7 bg-flyfx-card border border-flyfx-border rounded-lg hover:bg-white/10 transition" title="Upload JSON">
+            <label className="cursor-pointer flex items-center justify-center w-8 h-8 rounded-lg border transition"
+              style={{ background: `var(--subtle)`, borderColor: `var(--border)` }}
+              title="Upload JSON">
               <UploadIcon />
               <input type="file" accept=".json" onChange={handleUpload} className="hidden" />
             </label>
-            {/* Refresh */}
-            <button
-              onClick={fetchDaily}
-              disabled={loading}
-              title="Refresh deals"
-              className="flex items-center justify-center w-7 h-7 bg-flyfx-card border border-flyfx-border rounded-lg hover:bg-white/10 transition disabled:opacity-40"
-            >
-              <RefreshIcon />
-            </button>
+            {/* Run + date */}
+            <div className="flex flex-col items-center">
+              <button
+                onClick={() => setAppTab("pipeline")}
+                className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-bold transition ${
+                  appTab === "pipeline"
+                    ? "bg-flyfx-gold text-black"
+                    : "bg-flyfx-gold/20 border border-flyfx-gold/50 text-flyfx-gold hover:bg-flyfx-gold/30"
+                }`}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21" /></svg>
+                Run
+              </button>
+              {data && (
+                <span className="text-[10px] font-medium mt-1" style={{ color: `var(--muted)` }}>{data.date}</span>
+              )}
+            </div>
           </div>
         </div>
         {/* Row 2: tab nav */}
-        <div className="max-w-2xl mx-auto px-4 pb-0">
-          <div className="flex items-center gap-0.5">
+        <div className="max-w-5xl mx-auto px-4 pb-0">
+          <div className="flex items-center gap-1">
             {([
               { key: "daily" as const, label: "Daily" },
-              { key: "live" as const, label: "Search" },
-              { key: "coach" as const, label: "Coach" },
-              { key: "agent" as const, label: "Agent" },
-              { key: "granola" as const, label: "Calls" },
+              { key: "contacts" as const, label: "Contacts" },
+              { key: "analytics" as const, label: "Stats" },
+              { key: "chat" as const, label: "Chat" },
             ]).map((t) => (
               <button key={t.key} onClick={() => setAppTab(t.key)}
-                className={`px-4 py-2 text-xs font-medium border-b-2 transition ${
+                className={`px-5 py-2.5 text-sm font-semibold border-b-2 transition ${
                   appTab === t.key
                     ? "border-flyfx-gold text-flyfx-gold"
-                    : "border-transparent text-flyfx-muted hover:text-white"
-                }`}>
+                    : "border-transparent"
+                }`}
+                style={appTab !== t.key ? { color: `var(--muted)` } : undefined}>
                 {t.label}
               </button>
             ))}
@@ -2484,17 +3992,15 @@ export default function Home() {
         </div>
       </header>
 
-      <main className="max-w-2xl mx-auto px-4 py-4 space-y-4">
+      <main className="max-w-5xl mx-auto px-4 py-4 space-y-4">
         {appTab === "pipeline" ? (
-          <PipelineView onDealsLoaded={(d) => { setData(d); setTimeout(() => setAppTab("daily"), 500); }} />
-        ) : appTab === "granola" ? (
-          <GranolaView deals={data?.deals} />
-        ) : appTab === "agent" ? (
-          <AgentView data={data} />
-        ) : appTab === "coach" ? (
-          <CoachView deals={data?.deals} />
-        ) : appTab === "live" ? (
-          <LiveSearchView />
+          <PipelineView onDealsLoaded={(d) => { setData(d); writeLocalStorage(DEALS_CACHE_KEY, d); setTimeout(() => setAppTab("daily"), 500); }} />
+        ) : appTab === "contacts" ? (
+          <ContactsView liveStatuses={rawStatuses} />
+        ) : appTab === "analytics" ? (
+          <AnalyticsView deals={data?.deals} statuses={rawStatuses} />
+        ) : appTab === "chat" ? (
+          <ChatView data={data} />
         ) : !data ? (
           /* Empty state */
           <div className="text-center py-20 space-y-4">
@@ -2519,43 +4025,26 @@ export default function Home() {
           </div>
         ) : (
           <>
-            {/* Market & Intelligence */}
-            <MarketPanel data={data} />
+            {/* Monthly Progress Bar */}
+            <ProgressBar />
 
-            {/* Script Intelligence */}
-            <ScriptIntel data={data.scriptIntelligence} />
+            {/* Side by side: Market Intel + Call Playbook */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <MarketPanel data={data} />
+              <ScriptIntel data={data.scriptIntelligence} />
+            </div>
 
-            {/* Deals Section */}
+            {/* Deals Section — split by Kyle and Gus */}
             <div className="space-y-3">
-              {/* Person selector */}
-              <div className="flex items-center gap-2">
-                {(["all", "kyle", "gus"] as const).map((p) => (
-                  <button
-                    key={p}
-                    onClick={() => setPersonFilter(p)}
-                    className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition border ${
-                      personFilter === p
-                        ? p === "kyle"
-                          ? "bg-blue-600 border-blue-500 text-white"
-                          : p === "gus"
-                          ? "bg-purple-600 border-purple-500 text-white"
-                          : "bg-flyfx-gold border-flyfx-gold text-black"
-                        : "bg-flyfx-card border-flyfx-border text-flyfx-muted hover:text-white hover:border-white/20"
-                    }`}
-                  >
-                    {p === "all" ? `All (${data.deals.length})` : p === "kyle" ? `Kyle (${kyleCount})` : `Gus (${gusCount})`}
-                  </button>
-                ))}
-              </div>
 
               {/* Status filter */}
               <div className="flex items-center gap-1 bg-flyfx-card rounded-lg p-0.5 border border-flyfx-border overflow-x-auto">
                 {([
-                  { key: "to_call" as const, label: "To Call", count: toCallCount, color: "text-flyfx-gold" },
-                  { key: "called" as const, label: "Called", count: calledCount, color: "text-flyfx-gold" },
-                  { key: "callback" as const, label: "Callback", count: callbackCount, color: "text-amber-400" },
-                  { key: "imported" as const, label: "Imported", count: importedCount, color: "text-green-400" },
-                  { key: "deleted" as const, label: "Deleted", count: deletedCount, color: "text-red-400" },
+                  { key: "all" as const, label: "All", count: data.deals.length },
+                  { key: "to_call" as const, label: "To Call", count: toCallCount },
+                  { key: "completed" as const, label: "Completed", count: completedCount },
+                  { key: "callback" as const, label: "Call Back", count: callbackCount },
+                  { key: "follow_up" as const, label: "Follow-up", count: followUpCount },
                 ]).map((f) => (
                   <button
                     key={f.key}
@@ -2570,6 +4059,18 @@ export default function Home() {
                   </button>
                 ))}
               </div>
+
+              {/* Bulk HubSpot push */}
+              {pushableDeals.length > 0 && (
+                <button
+                  onClick={() => handleBulkHubSpotPush(pushableDeals)}
+                  disabled={bulkPushing}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-teal-600/20 border border-teal-500/40 text-teal-400 text-sm font-semibold hover:bg-teal-600/30 transition disabled:opacity-50"
+                >
+                  <HubSpotIcon />
+                  {bulkPushing ? "Pushing to HubSpot..." : `Push ${pushableDeals.length} contact${pushableDeals.length > 1 ? "s" : ""} to HubSpot`}
+                </button>
+              )}
 
               {/* Type filter & search */}
               <div className="flex items-center justify-between gap-3">
@@ -2601,31 +4102,58 @@ export default function Home() {
                 />
               </div>
 
-              {/* Deal Cards */}
-              <div className="space-y-3">
-                {filteredDeals?.map((deal) => {
+              {/* Deal Cards — Split by Kyle and Gus */}
+              {(() => {
+                const kylesDeals = filteredDeals?.filter((d) => d.assignedTo === "kyle") || [];
+                const gusDeals = filteredDeals?.filter((d) => d.assignedTo === "gus" || d.assignedTo === "shared") || [];
+
+                const renderCard = (deal: Deal) => {
                   const key = `${deal.name}__${deal.company}`;
+                  const cardId = deal.apolloId ?? key;
                   return (
                     <DealCard
-                      key={deal.rank}
+                      key={cardId}
                       deal={deal}
-                      isExpanded={expandedCard === deal.rank}
-                      onToggle={() =>
-                        setExpandedCard(expandedCard === deal.rank ? null : deal.rank)
-                      }
+                      isExpanded={expandedCard === cardId}
+                      onToggle={() => setExpandedCard(expandedCard === cardId ? null : cardId)}
                       status={getDealStatus(deal)}
                       onStatusChange={(s) => handleStatusChange(deal, s)}
                       onHubSpotImport={() => handleHubSpotImport(deal)}
                       importing={importingKey === key}
+                      onFollowUpEmail={() => setExpandedCard(cardId)}
+                      onEdit={(fields) => handleDealEdit(deal, fields)}
+                      showAsCompleted={getDealStatus(deal) !== "new"}
                     />
                   );
-                })}
-                {filteredDeals?.length === 0 && (
-                  <p className="text-center text-flyfx-muted py-8 text-sm">
-                    No deals match your filter.
-                  </p>
-                )}
-              </div>
+                };
+
+                return (
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {/* Kyle's deals */}
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs font-bold text-blue-400 uppercase tracking-wider">Kyle</span>
+                        <span className="text-[10px] text-flyfx-muted">{kylesDeals.length} deals</span>
+                      </div>
+                      {kylesDeals.map(renderCard)}
+                      {kylesDeals.length === 0 && (
+                        <p className="text-center text-flyfx-muted py-4 text-xs">No deals for Kyle</p>
+                      )}
+                    </div>
+                    {/* Gus's deals */}
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs font-bold text-purple-400 uppercase tracking-wider">Gus</span>
+                        <span className="text-[10px] text-flyfx-muted">{gusDeals.length} deals</span>
+                      </div>
+                      {gusDeals.map(renderCard)}
+                      {gusDeals.length === 0 && (
+                        <p className="text-center text-flyfx-muted py-4 text-xs">No deals for Gus</p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           </>
         )}

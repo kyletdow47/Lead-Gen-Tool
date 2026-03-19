@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { STATUSES_FILE, readJSON, writeJSON } from "@/lib/data";
+import { STATUSES_FILE, readJSON, writeJSON, updateContactStatus, loadContacts, saveContacts } from "@/lib/data";
 
 const HUBSPOT_API_KEY = process.env.HUBSPOT_API_KEY;
+const KYLE_OWNER_ID = "32686904"; // Kyle Dow — ALWAYS set. Non-negotiable.
+const HUBSPOT_PORTAL_ID = "145965136"; // For constructing contact URLs
 
-// POST /api/hubspot — immediately create a contact in HubSpot
+// POST /api/hubspot — create a contact in HubSpot with Kyle as owner
 export async function POST(req: NextRequest) {
   try {
     const { deal } = await req.json();
@@ -13,18 +15,13 @@ export async function POST(req: NextRequest) {
     }
 
     if (!HUBSPOT_API_KEY) {
-      return NextResponse.json(
-        { error: "HUBSPOT_API_KEY not configured in .env.local" },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: "HUBSPOT_API_KEY not configured" }, { status: 500 });
     }
 
-    // Split name into first/last
     const nameParts = (deal.name || "").trim().split(/\s+/);
     const firstName = nameParts[0] || "";
     const lastName = nameParts.slice(1).join(" ") || "";
 
-    // Create contact in HubSpot
     const hubspotRes = await fetch("https://api.hubapi.com/crm/v3/objects/contacts", {
       method: "POST",
       headers: {
@@ -44,19 +41,19 @@ export async function POST(req: NextRequest) {
           website: deal.domain ? `https://${deal.domain}` : "",
           hs_lead_status: "NEW",
           lifecyclestage: "lead",
-          // Custom note with deal context
-          notes_last_contacted: new Date().toISOString(),
+          hubspot_owner_id: KYLE_OWNER_ID, // ALWAYS Kyle Dow
         },
       }),
     });
 
+    const key = `${deal.name}__${deal.company}`;
+
     if (!hubspotRes.ok) {
       const errBody = await hubspotRes.text();
-      // Check for duplicate contact (409 conflict)
+
+      // Handle duplicate (409)
       if (hubspotRes.status === 409) {
-        // Update status to imported anyway — they already exist
         const statuses = (await readJSON(STATUSES_FILE)) || {};
-        const key = `${deal.name}__${deal.company}`;
         statuses[key] = {
           ...statuses[key],
           status: "imported",
@@ -64,6 +61,7 @@ export async function POST(req: NextRequest) {
           hubspotNote: "Already existed in HubSpot",
         };
         await writeJSON(STATUSES_FILE, statuses);
+        try { await updateContactStatus(key, "imported"); } catch {}
 
         return NextResponse.json({
           success: true,
@@ -71,6 +69,7 @@ export async function POST(req: NextRequest) {
           message: `${deal.name} already exists in HubSpot`,
         });
       }
+
       return NextResponse.json(
         { error: `HubSpot API error: ${hubspotRes.status}`, detail: errBody },
         { status: 502 }
@@ -78,15 +77,17 @@ export async function POST(req: NextRequest) {
     }
 
     const hubspotContact = await hubspotRes.json();
+    const hubspotId = hubspotContact.id;
+    const hubspotUrl = `https://app.hubspot.com/contacts/${HUBSPOT_PORTAL_ID}/contact/${hubspotId}`;
 
-    // Update status to imported
+    // Update statuses
     const statuses = (await readJSON(STATUSES_FILE)) || {};
-    const key = `${deal.name}__${deal.company}`;
     statuses[key] = {
       ...statuses[key],
       status: "imported",
       updatedAt: new Date().toISOString(),
-      hubspotId: hubspotContact.id,
+      hubspotId,
+      hubspotUrl,
       name: deal.name,
       company: deal.company,
       title: deal.title,
@@ -101,10 +102,21 @@ export async function POST(req: NextRequest) {
     };
     await writeJSON(STATUSES_FILE, statuses);
 
+    // Update persistent contacts collection with hubspot_id
+    try {
+      await updateContactStatus(key, "imported");
+      const contacts = await loadContacts();
+      if (contacts[key]) {
+        contacts[key].hubspot_id = hubspotId;
+        await saveContacts(contacts);
+      }
+    } catch {}
+
     return NextResponse.json({
       success: true,
-      hubspotId: hubspotContact.id,
-      message: `${deal.name} imported to HubSpot`,
+      hubspotId,
+      hubspotUrl,
+      message: `${deal.name} imported to HubSpot (owner: Kyle Dow)`,
     });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });

@@ -27,7 +27,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="min-h-screen bg-flyfx-dark">{children}</body>
+      <body className="min-h-screen theme-bg">{children}</body>
     </html>
   );
 }

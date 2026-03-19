@@ -1,17 +1,22 @@
-// POST /api/agent — FlyFX Evergreen Sales Intelligence Agent (streaming)
-// Streaming chat AI that knows everything about selling air cargo charters
+// POST /api/agent — FlyFX Sales Intelligence Agent
+// mode: 'quick' (default) — simple streaming text, no tools, no history (backward compatible)
+// mode: 'chat'  — full brain mode: sparring partner, tool_use, insight extraction, conversation history
 
 import { NextRequest, NextResponse } from "next/server";
+import {
+  loadBrain, appendInsight, deleteInsight,
+  loadChatHistory, saveChatHistory,
+  readJSON, GRANOLA_CACHE_FILE,
+} from "@/lib/data";
+import type { BrainInsight, ChatMessage } from "@/lib/types";
 
-export const maxDuration = 60;
+export const maxDuration = 120; // Chat mode may need multi-turn tool loops
 
 const CLAUDE_API = "https://api.anthropic.com/v1/messages";
 
-const AGENT_SYSTEM = `You are the FlyFXFreight Sales Intelligence Agent — an always-on strategic advisor for Kyle Dow and the FlyFX charter brokerage team.
+// ── Shared FlyFX context (used by both modes) ──────────────────
 
-You have the analytical mind of a commodity trader, the market instincts of a veteran freight broker, and the sales coaching skills of a world-class B2B consultant.
-
-## WHO YOU WORK FOR
+const FLYFX_CONTEXT = `## WHO YOU WORK FOR
 
 FlyFXFreight — UK-based air cargo charter broker (HQ: Mildenhall, Bury St Edmunds). Pure broker model: no AOC, neutral aircraft selection from thousands of global operators. ACA accredited.
 
@@ -48,10 +53,6 @@ Benchmark: Antonio Cadilhe — Branch Manager Projects Oil & Gas at DSV = 90-92.
 Every world event is a domino. Trace forward:
 EVENT → FIRST ORDER (logistics impact) → SECOND ORDER (downstream affected) → THIRD ORDER (forwarder needs what) → CHARTER TRIGGER
 
-Oil $100/bbl → North Sea rig activity → offshore equipment moves → energy forwarders in Aberdeen/Stavanger need charter.
-Hormuz closed → Gulf belly cargo drops → rerouting via Turkey/Jordan → perishable charter demand.
-Airline cuts route → belly cargo lost → forwarders need alternatives → charter fills gap.
-
 ## VERTICALS
 Kyle's territory (≥11pts): Energy/Oil & Gas (15), DG/Hazmat (13), Project Cargo (12), Defence/Aerospace (11).
 Gus's territory (≤10pts): Pharma (10), Perishables (9), Automotive (7), General Air Freight (5).
@@ -79,7 +80,15 @@ NEVER target: IT, HR, Finance, Marketing, Ocean-only, Road-only, Warehouse-only 
 ## BRAND VOICE
 Company name: FlyFX (capital F, capital X, no space). Sub-brands: FlyFXFreight, FlyFXJets, FlyFXVisuals.
 BANNED: amazing, awesome, incredible, seamless, cutting-edge, game-changer, best-in-class, leverage, passionate, unique.
-Tone: expert, precise, professional, direct. Earned authority. Oxford comma always.
+Tone: expert, precise, professional, direct. Earned authority. Oxford comma always.`;
+
+// ── Quick mode system prompt (original behavior) ────────────────
+
+const QUICK_SYSTEM = `You are the FlyFXFreight Sales Intelligence Agent — an always-on strategic advisor for Kyle Dow and the FlyFX charter brokerage team.
+
+You have the analytical mind of a commodity trader, the market instincts of a veteran freight broker, and the sales coaching skills of a world-class B2B consultant.
+
+${FLYFX_CONTEXT}
 
 ## WHAT YOU CAN DO
 1. Answer questions about selling charters to freight forwarders
@@ -94,6 +103,285 @@ Tone: expert, precise, professional, direct. Earned authority. Oxford comma alwa
 
 You are a specialist cargo charter sales strategist. Every response shows deep domain knowledge. You think in consequence chains, not headlines. You measure in ICP scores, not gut feelings.`;
 
+// ── Chat mode system prompt (sparring partner + brain) ──────────
+
+function buildChatSystem(brainSummary: string, callStats: string): string {
+  return `You are Kyle Dow's intelligence partner for the FlyFXFreight deals machine — a sparring partner who challenges assumptions, cites real data, and helps Kyle think sharper about the charter market.
+
+You are NOT a yes-man. When Kyle shares a market hunch or strategy idea, your job is to:
+- Ask what evidence he has for the claim
+- Ask what would change his mind
+- Ask what the risk is if he's wrong
+- Present counter-arguments before agreeing
+- Reference actual call data and conversion rates when available (use the query_granola tool)
+- Compare his intuition against the scoring model and pipeline data
+
+You think in consequence chains, not headlines. You measure in ICP scores, not gut feelings.
+
+${FLYFX_CONTEXT}
+
+## YOUR TOOLS
+
+You have tools to interact with the FlyFX "brain" — a structured knowledge base that the deals pipeline reads when generating leads.
+
+**When you identify an actionable insight from the conversation, use save_insight to store it.** An actionable insight is one that changes the pipeline's output — a scoring modifier, a script adjustment, or an exclusion/priority rule.
+
+There are exactly 3 types of brain insight:
+1. **adjust_scoring** — Changes a scoring dimension weight. Must be structured data: dimension, filter, modifier (number). The scoring engine applies these arithmetically. Example: "+5 to verticalMatch for DG companies in Belgium."
+2. **adjust_script** — Changes an opening line template, crisis angle, or objection response. This is a natural language instruction that Claude interprets when generating scripts. Example: "Shift crisis hook from urgency to long-term partnership positioning."
+3. **exclude_or_prioritize** — Adds to an exclusion list or priority list. Example: "Exclude ocean-only companies in Scandinavia" or "Prioritize France for the next 2 weeks."
+
+**Rules for insight extraction:**
+- If the conversation doesn't produce a pipeline-changing insight, don't force one. Not every exchange needs a brain entry.
+- After saving an insight, tell Kyle what you stored and how it will affect the pipeline.
+- Numbers must be deterministic (structured data). Words can be AI-generated (prompt-based).
+- Call debriefs and general notes do NOT go in the brain — that's what Granola and HubSpot are for. Only store insights that change the pipeline's output.
+
+## ACTIVE BRAIN STATE
+
+These are the current modifiers the pipeline is using:
+
+${brainSummary || "No active brain insights yet. The pipeline is running on base scoring weights."}
+
+## CALL DATA SUMMARY
+
+${callStats || "No call data available yet. Use query_granola to pull recent call analyses."}
+
+## CONVERSATION STYLE
+- Be direct. Challenge Kyle. Don't pad responses with pleasantries.
+- When Kyle shares a market observation, respond with "What's the evidence?" before agreeing.
+- Reference specific numbers: scoring weights, conversion rates, lead counts.
+- If Kyle is wrong about something, say so clearly and explain why.
+- Keep responses concise — Kyle is busy making calls.`;
+}
+
+// ── Tool definitions for chat mode ──────────────────────────────
+
+const CHAT_TOOLS = [
+  { type: "web_search_20250305" as const, name: "web_search" },
+  {
+    name: "save_insight",
+    description: "Save a structured insight to the FlyFX brain. Only use this when the conversation produces an actionable pipeline change — a scoring modifier, script adjustment, or exclusion/priority rule. After saving, tell Kyle what was stored and how it affects the pipeline.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        type: { type: "string" as const, enum: ["adjust_scoring", "adjust_script", "exclude_or_prioritize"], description: "The type of brain insight" },
+        reason: { type: "string" as const, description: "Why this insight is being stored (1-2 sentences)" },
+        // adjust_scoring fields
+        dimension: { type: "string" as const, description: "For adjust_scoring: which scoring dimension (crisisProximity, companyFit, roleAuthority, verticalMatch, signalStrength, contactQuality)" },
+        filter: { type: "object" as const, description: "For adjust_scoring: filter conditions e.g. {\"vertical\": \"DG\", \"country\": \"Belgium\"}", additionalProperties: { type: "string" as const } },
+        modifier: { type: "number" as const, description: "For adjust_scoring: points to add (positive) or subtract (negative)" },
+        // adjust_script fields
+        target: { type: "string" as const, description: "For adjust_script: what to change (crisis_hook, opening_line, objection_response, closing)" },
+        instruction: { type: "string" as const, description: "For adjust_script: natural language instruction for script generation" },
+        // exclude_or_prioritize fields
+        action: { type: "string" as const, enum: ["exclude", "prioritize"], description: "For exclude_or_prioritize: exclude or prioritize" },
+        scope: { type: "string" as const, description: "For exclude_or_prioritize: what scope (vertical, company, country, geography)" },
+        value: { type: "string" as const, description: "For exclude_or_prioritize: the value to exclude/prioritize" },
+        geography: { type: "string" as const, description: "For exclude_or_prioritize: optional geographic scope" },
+      },
+      required: ["type", "reason"],
+    },
+  },
+  {
+    name: "read_brain",
+    description: "Read the current state of the FlyFX brain — all active insights that are modifying the pipeline's scoring, scripts, and lead selection.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        type_filter: { type: "string" as const, enum: ["adjust_scoring", "adjust_script", "exclude_or_prioritize"], description: "Optional: filter by insight type" },
+      },
+    },
+  },
+  {
+    name: "delete_insight",
+    description: "Remove a brain insight by ID. Use when Kyle says an insight is wrong or no longer relevant.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        id: { type: "string" as const, description: "The insight ID to delete (e.g. ins_1234_1)" },
+      },
+      required: ["id"],
+    },
+  },
+  {
+    name: "query_granola",
+    description: "Query recent cold call analyses — outcomes, winning angles, objections, conversion rates. Use this to ground advice in real call data rather than theory.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        query: { type: "string" as const, description: "What to look for in call data (e.g. 'conversion rates by country', 'common objections', 'winning angles')" },
+      },
+      required: ["query"],
+    },
+  },
+];
+
+// ── Tool execution ──────────────────────────────────────────────
+
+async function executeTool(name: string, input: any): Promise<{ content: string; insight?: BrainInsight }> {
+  switch (name) {
+    case "save_insight": {
+      const insight = await appendInsight({
+        type: input.type,
+        date: new Date().toISOString().split("T")[0],
+        reason: input.reason,
+        active: true,
+        dimension: input.dimension,
+        filter: input.filter,
+        modifier: input.modifier,
+        target: input.target,
+        instruction: input.instruction,
+        action: input.action,
+        scope: input.scope,
+        value: input.value,
+        geography: input.geography,
+      });
+      return {
+        content: JSON.stringify({ saved: true, insight }),
+        insight,
+      };
+    }
+    case "read_brain": {
+      const brain = await loadBrain();
+      let insights = brain.insights.filter((i) => i.active);
+      if (input.type_filter) {
+        insights = insights.filter((i) => i.type === input.type_filter);
+      }
+      return {
+        content: JSON.stringify({
+          total: insights.length,
+          insights,
+          lastUpdated: brain.lastUpdated,
+        }),
+      };
+    }
+    case "delete_insight": {
+      const deleted = await deleteInsight(input.id);
+      return {
+        content: JSON.stringify({ deleted, id: input.id }),
+      };
+    }
+    case "query_granola": {
+      const cache = await readJSON(GRANOLA_CACHE_FILE);
+      const analyses = cache?.analyses || [];
+      if (analyses.length === 0) {
+        return { content: JSON.stringify({ message: "No call data available yet. Kyle needs to paste call transcripts into the Granola analysis endpoint first.", analyses: [] }) };
+      }
+
+      // Build summary stats
+      const total = analyses.length;
+      const outcomes: Record<string, number> = {};
+      const angleMap: Record<string, number> = {};
+      const objectionMap: Record<string, number> = {};
+      for (const a of analyses) {
+        outcomes[a.outcome] = (outcomes[a.outcome] || 0) + 1;
+        if (a.angleWorked) angleMap[a.angleWorked] = (angleMap[a.angleWorked] || 0) + 1;
+        if (a.objectionUsed) objectionMap[a.objectionUsed] = (objectionMap[a.objectionUsed] || 0) + 1;
+      }
+
+      const topAngles = Object.entries(angleMap).sort(([, a], [, b]) => b - a).slice(0, 5);
+      const topObjections = Object.entries(objectionMap).sort(([, a], [, b]) => b - a).slice(0, 5);
+      const positiveRate = total > 0
+        ? Math.round(((outcomes.positive || 0) + (outcomes.meeting_booked || 0)) / total * 100)
+        : 0;
+
+      return {
+        content: JSON.stringify({
+          totalCalls: total,
+          outcomes,
+          positiveRate: `${positiveRate}%`,
+          topWinningAngles: topAngles,
+          topObjections,
+          recentCalls: analyses.slice(-10).map((a: any) => ({
+            contact: a.contactName,
+            company: a.company,
+            outcome: a.outcome,
+            angleWorked: a.angleWorked,
+            objection: a.objectionUsed,
+            coachingNote: a.coachingNote,
+          })),
+        }),
+      };
+    }
+    default:
+      return { content: JSON.stringify({ error: `Unknown tool: ${name}` }) };
+  }
+}
+
+// ── Brain summary for system prompt ─────────────────────────────
+
+function formatBrainSummary(insights: BrainInsight[]): string {
+  const active = insights.filter((i) => i.active);
+  if (active.length === 0) return "";
+
+  const lines: string[] = [];
+  const scoring = active.filter((i) => i.type === "adjust_scoring");
+  const scripts = active.filter((i) => i.type === "adjust_script");
+  const rules = active.filter((i) => i.type === "exclude_or_prioritize");
+
+  if (scoring.length > 0) {
+    lines.push("**Scoring Modifiers:**");
+    for (const s of scoring) {
+      const filterStr = s.filter ? Object.entries(s.filter).map(([k, v]) => `${k}=${v}`).join(", ") : "all";
+      lines.push(`- [${s.id}] ${s.dimension} ${s.modifier! > 0 ? "+" : ""}${s.modifier} when ${filterStr} — "${s.reason}"`);
+    }
+  }
+  if (scripts.length > 0) {
+    lines.push("**Script Adjustments:**");
+    for (const s of scripts) {
+      lines.push(`- [${s.id}] ${s.target}: "${s.instruction}" — "${s.reason}"`);
+    }
+  }
+  if (rules.length > 0) {
+    lines.push("**Exclusions & Priorities:**");
+    for (const r of rules) {
+      lines.push(`- [${r.id}] ${r.action} ${r.scope}="${r.value}"${r.geography ? ` in ${r.geography}` : ""} — "${r.reason}"`);
+    }
+  }
+
+  return lines.join("\n");
+}
+
+// ── Claude API call (streaming) ─────────────────────────────────
+
+async function callClaudeStreaming(
+  apiKey: string,
+  system: string,
+  messages: any[],
+  tools: any[],
+): Promise<Response> {
+  const res = await fetch(CLAUDE_API, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 4000,
+      stream: true,
+      system,
+      messages,
+      tools,
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Claude API failed: ${res.status} ${err}`);
+  }
+  return res;
+}
+
+// ── SSE helper ──────────────────────────────────────────────────
+
+function sseEncode(event: string, data: any): Uint8Array {
+  return new TextEncoder().encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+}
+
+// ── Main handler ────────────────────────────────────────────────
+
 export async function POST(request: NextRequest) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
@@ -102,79 +390,248 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { messages, context } = body;
+    const { messages, context, mode } = body;
 
-    // Build messages, injecting context into first user message if provided
-    const claudeMessages = messages.map((m: any, i: number) => {
-      if (i === 0 && m.role === "user" && context) {
-        return { role: m.role, content: `[Context: ${context}]\n\n${m.content}` };
-      }
-      return { role: m.role, content: m.content };
-    });
+    // ─── QUICK MODE (default — backward compatible) ───────────
+    if (mode !== "chat") {
+      const claudeMessages = messages.map((m: any, i: number) => {
+        if (i === 0 && m.role === "user" && context) {
+          return { role: m.role, content: `[Context: ${context}]\n\n${m.content}` };
+        }
+        return { role: m.role, content: m.content };
+      });
 
-    const res = await fetch(CLAUDE_API, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 4000,
-        stream: true,
-        system: AGENT_SYSTEM,
-        messages: claudeMessages,
-        tools: [{ type: "web_search_20250305", name: "web_search" }],
-      }),
-    });
+      const res = await callClaudeStreaming(apiKey, QUICK_SYSTEM, claudeMessages, [
+        { type: "web_search_20250305", name: "web_search" },
+      ]);
 
-    if (!res.ok) {
-      const err = await res.text();
-      return NextResponse.json({ error: `Claude API failed: ${res.status}` }, { status: 500 });
-    }
-
-    // Stream the response
-    const stream = new ReadableStream({
-      async start(controller) {
-        const reader = res.body!.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-
-        try {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split("\n");
-            buffer = lines.pop() || "";
-
-            for (const line of lines) {
-              if (line.startsWith("data: ")) {
-                const data = line.slice(6).trim();
-                if (data === "[DONE]") continue;
-                try {
-                  const parsed = JSON.parse(data);
-                  if (parsed.type === "content_block_delta" && parsed.delta?.type === "text_delta") {
-                    controller.enqueue(new TextEncoder().encode(parsed.delta.text));
-                  }
-                } catch {}
+      const stream = new ReadableStream({
+        async start(controller) {
+          const reader = res.body!.getReader();
+          const decoder = new TextDecoder();
+          let buffer = "";
+          try {
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              buffer += decoder.decode(value, { stream: true });
+              const lines = buffer.split("\n");
+              buffer = lines.pop() || "";
+              for (const line of lines) {
+                if (line.startsWith("data: ")) {
+                  const data = line.slice(6).trim();
+                  if (data === "[DONE]") continue;
+                  try {
+                    const parsed = JSON.parse(data);
+                    if (parsed.type === "content_block_delta" && parsed.delta?.type === "text_delta") {
+                      controller.enqueue(new TextEncoder().encode(parsed.delta.text));
+                    }
+                  } catch {}
+                }
               }
             }
+            if (buffer.startsWith("data: ")) {
+              try {
+                const parsed = JSON.parse(buffer.slice(6).trim());
+                if (parsed.type === "content_block_delta" && parsed.delta?.type === "text_delta") {
+                  controller.enqueue(new TextEncoder().encode(parsed.delta.text));
+                }
+              } catch {}
+            }
+          } catch {
+            controller.enqueue(new TextEncoder().encode("\n\n[Error: Connection interrupted]"));
+          } finally {
+            controller.close();
           }
-          // Process remaining buffer
-          if (buffer.startsWith("data: ")) {
-            const data = buffer.slice(6).trim();
-            try {
-              const parsed = JSON.parse(data);
-              if (parsed.type === "content_block_delta" && parsed.delta?.type === "text_delta") {
-                controller.enqueue(new TextEncoder().encode(parsed.delta.text));
+        },
+      });
+
+      return new Response(stream, {
+        headers: {
+          "Content-Type": "text/plain; charset=utf-8",
+          "Cache-Control": "no-cache",
+          "Connection": "keep-alive",
+        },
+      });
+    }
+
+    // ─── CHAT MODE ────────────────────────────────────────────
+    // Load brain and call data for system prompt
+    const brain = await loadBrain();
+    const brainSummary = formatBrainSummary(brain.insights);
+
+    // Load cached granola stats for system prompt
+    const granolaCache = await readJSON(GRANOLA_CACHE_FILE);
+    const analyses = granolaCache?.analyses || [];
+    const callStats = analyses.length > 0
+      ? `${analyses.length} calls analysed. Positive rate: ${Math.round(((analyses.filter((a: any) => a.outcome === "positive" || a.outcome === "meeting_booked").length) / analyses.length) * 100)}%. Recent outcomes: ${analyses.slice(-5).map((a: any) => `${a.contactName || "Unknown"} @ ${a.company || "?"}: ${a.outcome}`).join("; ")}`
+      : "";
+
+    const chatSystem = buildChatSystem(brainSummary, callStats);
+
+    // Load conversation history and merge with current messages
+    const history = await loadChatHistory();
+    const recentHistory = history.slice(-20);
+
+    const historyMessages = recentHistory.map((m) => ({
+      role: m.role,
+      content: m.content,
+    }));
+
+    const currentUserMessage = messages[messages.length - 1]?.content || "";
+
+    const allMessages = [
+      ...historyMessages,
+      ...messages.map((m: any) => ({ role: m.role, content: m.content })),
+    ];
+
+    // Streaming chat with tool handling
+    const stream = new ReadableStream({
+      async start(controller) {
+        const savedInsights: BrainInsight[] = [];
+        let fullResponseText = "";
+
+        try {
+          let conversationMessages = [...allMessages];
+          let rounds = 0;
+          const MAX_ROUNDS = 5;
+
+          while (rounds < MAX_ROUNDS) {
+            rounds++;
+
+            // Make a STREAMING call to Claude
+            const claudeRes = await callClaudeStreaming(
+              apiKey, chatSystem, conversationMessages, CHAT_TOOLS,
+            );
+
+            // Parse the stream: forward text deltas, accumulate tool_use blocks
+            const reader = claudeRes.body!.getReader();
+            const decoder = new TextDecoder();
+            let sseBuffer = "";
+            let stopReason = "";
+            let roundText = "";
+
+            // Track content blocks for tool_use
+            const contentBlocks: any[] = [];
+            let currentBlockIndex = -1;
+            let currentBlockType = "";
+            let currentToolId = "";
+            let currentToolName = "";
+            let toolInputJson = "";
+
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+
+              sseBuffer += decoder.decode(value, { stream: true });
+              const lines = sseBuffer.split("\n");
+              sseBuffer = lines.pop() || "";
+
+              for (const line of lines) {
+                if (!line.startsWith("data: ")) continue;
+                const raw = line.slice(6).trim();
+                if (raw === "[DONE]") continue;
+
+                let event: any;
+                try { event = JSON.parse(raw); } catch { continue; }
+
+                switch (event.type) {
+                  case "content_block_start": {
+                    currentBlockIndex = event.index;
+                    const block = event.content_block;
+                    currentBlockType = block.type;
+                    if (block.type === "tool_use") {
+                      currentToolId = block.id;
+                      currentToolName = block.name;
+                      toolInputJson = "";
+                    }
+                    break;
+                  }
+                  case "content_block_delta": {
+                    if (event.delta?.type === "text_delta" && currentBlockType === "text") {
+                      // Stream text to client immediately
+                      const text = event.delta.text;
+                      roundText += text;
+                      controller.enqueue(sseEncode("text", { text }));
+                    } else if (event.delta?.type === "input_json_delta") {
+                      toolInputJson += event.delta.partial_json;
+                    }
+                    break;
+                  }
+                  case "content_block_stop": {
+                    if (currentBlockType === "text" && roundText) {
+                      contentBlocks.push({ type: "text", text: roundText });
+                    } else if (currentBlockType === "tool_use") {
+                      let parsedInput = {};
+                      try { parsedInput = JSON.parse(toolInputJson); } catch {}
+                      contentBlocks.push({
+                        type: "tool_use",
+                        id: currentToolId,
+                        name: currentToolName,
+                        input: parsedInput,
+                      });
+                    }
+                    currentBlockType = "";
+                    break;
+                  }
+                  case "message_delta": {
+                    if (event.delta?.stop_reason) {
+                      stopReason = event.delta.stop_reason;
+                    }
+                    break;
+                  }
+                }
               }
-            } catch {}
+            }
+
+            fullResponseText += roundText;
+
+            // If stop_reason is tool_use, execute tools and loop
+            const toolCalls = contentBlocks.filter((b) => b.type === "tool_use");
+
+            if (stopReason === "tool_use" && toolCalls.length > 0) {
+              const toolResults: any[] = [];
+              for (const tc of toolCalls) {
+                if (tc.name === "web_search") continue;
+
+                controller.enqueue(sseEncode("tool_status", { tool: tc.name, status: "running" }));
+                const result = await executeTool(tc.name, tc.input);
+                toolResults.push({ id: tc.id, content: result.content });
+
+                if (result.insight) {
+                  savedInsights.push(result.insight);
+                  controller.enqueue(sseEncode("insight", result.insight));
+                }
+              }
+
+              // Add assistant turn + tool results for next round
+              conversationMessages.push({ role: "assistant", content: contentBlocks });
+              for (const tr of toolResults) {
+                conversationMessages.push({
+                  role: "user",
+                  content: [{ type: "tool_result", tool_use_id: tr.id, content: tr.content }],
+                });
+              }
+              // Reset for next round — text from this round was already streamed
+              continue;
+            }
+
+            // end_turn — we're done
+            break;
           }
-        } catch (err) {
-          controller.enqueue(new TextEncoder().encode("\n\n[Error: Connection interrupted]"));
+
+          // Save chat history
+          const now = new Date().toISOString();
+          const newMessages: ChatMessage[] = [
+            ...history,
+            { role: "user", content: currentUserMessage, timestamp: now, insightExtracted: null },
+            { role: "assistant", content: fullResponseText, timestamp: now, insightExtracted: savedInsights.length > 0 ? savedInsights[0] : null },
+          ];
+          await saveChatHistory(newMessages);
+
+          controller.enqueue(sseEncode("done", { insightsCount: savedInsights.length }));
+        } catch (err: any) {
+          controller.enqueue(sseEncode("error", { message: err.message || "Chat failed" }));
         } finally {
           controller.close();
         }
@@ -183,9 +640,10 @@ export async function POST(request: NextRequest) {
 
     return new Response(stream, {
       headers: {
-        "Content-Type": "text/plain; charset=utf-8",
+        "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
         "Connection": "keep-alive",
+        "X-Accel-Buffering": "no",
       },
     });
   } catch (err: any) {

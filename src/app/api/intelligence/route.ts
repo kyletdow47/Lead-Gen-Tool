@@ -3,6 +3,7 @@
 // Ported from flyfx-deals-deck v1
 
 import { NextRequest, NextResponse } from "next/server";
+import { loadBrain } from "@/lib/data";
 
 export const maxDuration = 60;
 
@@ -96,7 +97,23 @@ export async function POST(request: NextRequest) {
 
     // Action: generate scripts for leads
     if (action === "generate_scripts") {
-      const systemPrompt = mode === "private_jets" ? JETS_SCRIPT_SYSTEM : SCRIPT_SYSTEM;
+      let systemPrompt = mode === "private_jets" ? JETS_SCRIPT_SYSTEM : SCRIPT_SYSTEM;
+
+      // Inject brain script adjustments
+      if (mode !== "private_jets") {
+        try {
+          const brain = await loadBrain();
+          const scriptAdjustments = brain.insights.filter(
+            (i) => i.active && i.type === "adjust_script"
+          );
+          if (scriptAdjustments.length > 0) {
+            const adjustmentLines = scriptAdjustments.map(
+              (s) => `- ${s.target || "general"}: ${s.instruction}`
+            );
+            systemPrompt += `\n\nBRAIN ADJUSTMENTS (from Kyle's market intelligence — apply these to today's scripts):\n${adjustmentLines.join("\n")}`;
+          }
+        } catch {}
+      }
       const leadsText = leads
         .map(
           (l: any, i: number) =>
