@@ -7,14 +7,28 @@ import type { DailyData, Deal, DealStatus, IntelSection, ConsequenceChain, Coach
 function AuthGate({ onAuth }: { onAuth: () => void }) {
   const [pw, setPw] = useState("");
   const [error, setError] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const submit = () => {
-    if (pw === "flyfxdeals2026") {
-      sessionStorage.setItem("flyfx_auth", "1");
-      onAuth();
-    } else {
+  const submit = async () => {
+    if (!pw) return;
+    setLoading(true);
+    try {
+      const res = await fetch("/api/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: pw }),
+      });
+      if (res.ok) {
+        onAuth();
+      } else {
+        setError(true);
+        setTimeout(() => setError(false), 1500);
+      }
+    } catch {
       setError(true);
       setTimeout(() => setError(false), 1500);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -39,9 +53,10 @@ function AuthGate({ onAuth }: { onAuth: () => void }) {
           />
           <button
             onClick={submit}
-            className="w-full py-3 bg-flyfx-gold text-black font-semibold rounded-lg hover:opacity-90 transition"
+            disabled={loading}
+            className="w-full py-3 bg-flyfx-gold text-black font-semibold rounded-lg hover:opacity-90 transition disabled:opacity-60"
           >
-            Enter
+            {loading ? "Checking..." : "Enter"}
           </button>
         </div>
       </div>
@@ -3585,11 +3600,12 @@ export default function Home() {
     writeLocalStorage(FILTERS_KEY, { filter, personFilter, statusFilter });
   }, [filter, personFilter, statusFilter]);
 
-  // Check session auth
+  // Check session auth via server-side cookie validation
   useEffect(() => {
-    if (typeof window !== "undefined" && sessionStorage.getItem("flyfx_auth") === "1") {
-      setAuthed(true);
-    }
+    fetch("/api/auth")
+      .then((r) => r.json())
+      .then((j) => { if (j.authed) setAuthed(true); })
+      .catch(() => {});
   }, []);
 
   // Fetch pending import queue count on auth
