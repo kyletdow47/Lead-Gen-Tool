@@ -3803,7 +3803,7 @@ export default function Home() {
         const hubspotLink = json.hubspotUrl ? ` — <a href="${json.hubspotUrl}" target="_blank" class="underline">View in HubSpot</a>` : "";
         setBanner(json.alreadyExisted
           ? `${deal.name} — already in HubSpot`
-          : `${deal.name} — imported to HubSpot (Owner: Kyle Dow)${json.hubspotUrl ? " ✓" : ""}`
+          : `${deal.name} — imported to HubSpot (Owner: ${deal.assignedTo === "gus" ? "Gus" : "Kyle Dow"})${json.hubspotUrl ? " ✓" : ""}`
         );
         // Open HubSpot URL if available
         if (json.hubspotUrl && !json.alreadyExisted) {

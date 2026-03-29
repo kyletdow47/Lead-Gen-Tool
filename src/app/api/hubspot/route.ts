@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { STATUSES_FILE, readJSON, writeJSON, updateContactStatus, loadContacts, saveContacts } from "@/lib/data";
 
 const HUBSPOT_API_KEY = process.env.HUBSPOT_API_KEY;
-const KYLE_OWNER_ID = "32686904"; // Kyle Dow — ALWAYS set. Non-negotiable.
+const KYLE_OWNER_ID = "32686904";
+const GUS_OWNER_ID = "79075901";
 const HUBSPOT_PORTAL_ID = "145965136"; // For constructing contact URLs
 
-// POST /api/hubspot — create a contact in HubSpot with Kyle as owner
+// POST /api/hubspot — create a contact in HubSpot
 export async function POST(req: NextRequest) {
   try {
     const { deal } = await req.json();
@@ -21,6 +22,8 @@ export async function POST(req: NextRequest) {
     const nameParts = (deal.name || "").trim().split(/\s+/);
     const firstName = nameParts[0] || "";
     const lastName = nameParts.slice(1).join(" ") || "";
+    const ownerId = deal.assignedTo === "gus" ? GUS_OWNER_ID : KYLE_OWNER_ID;
+    const ownerName = deal.assignedTo === "gus" ? "Gus" : "Kyle Dow";
 
     const hubspotRes = await fetch("https://api.hubapi.com/crm/v3/objects/contacts", {
       method: "POST",
@@ -41,7 +44,7 @@ export async function POST(req: NextRequest) {
           website: deal.domain ? `https://${deal.domain}` : "",
           hs_lead_status: "NEW",
           lifecyclestage: "lead",
-          hubspot_owner_id: KYLE_OWNER_ID, // ALWAYS Kyle Dow
+          hubspot_owner_id: ownerId,
         },
       }),
     });
@@ -116,7 +119,7 @@ export async function POST(req: NextRequest) {
       success: true,
       hubspotId,
       hubspotUrl,
-      message: `${deal.name} imported to HubSpot (owner: Kyle Dow)`,
+      message: `${deal.name} imported to HubSpot (owner: ${ownerName})`,
     });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
