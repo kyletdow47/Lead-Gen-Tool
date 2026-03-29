@@ -3575,6 +3575,8 @@ export default function Home() {
   const [rawStatuses, setRawStatuses] = useState<Record<string, any>>({});
   const [statusByApolloId, setStatusByApolloId] = useState<Record<string, DealStatus>>({});
   const [importingKey, setImportingKey] = useState<string | null>(null);
+  const [importingQueue, setImportingQueue] = useState(false);
+  const [queueCount, setQueueCount] = useState(0);
   const [appTab, setAppTab] = useState<"daily" | "pipeline" | "analytics" | "contacts" | "chat">("daily");
   const [contactsRefreshKey, setContactsRefreshKey] = useState(0);
 
@@ -3589,6 +3591,15 @@ export default function Home() {
       setAuthed(true);
     }
   }, []);
+
+  // Fetch pending import queue count on auth
+  useEffect(() => {
+    if (!authed) return;
+    fetch("/api/rate/queue")
+      .then((r) => r.json())
+      .then((j) => setQueueCount(j.pending || 0))
+      .catch(() => {});
+  }, [authed]);
 
   // On auth: always reload statuses; only fetch deals if cache is stale (different date than today)
   useEffect(() => {
@@ -3826,6 +3837,27 @@ export default function Home() {
     setBulkPushing(false);
     setBanner(`${succeeded} of ${deals.length} contacts pushed to HubSpot`);
     setTimeout(() => setBanner(null), 5000);
+  }, []);
+
+  // Import approved leads from queue into HubSpot
+  const handleImportApproved = useCallback(async () => {
+    setImportingQueue(true);
+    setBanner("Importing approved leads to HubSpot...");
+    try {
+      const res = await fetch("/api/import-approved", { method: "POST" });
+      const json = await res.json();
+      if (json.success) {
+        setQueueCount(0);
+        setBanner(json.message || `${json.succeeded} contact(s) imported to HubSpot`);
+      } else {
+        setBanner(`Import failed: ${json.error}`);
+      }
+    } catch {
+      setBanner("Failed to import approved leads");
+    } finally {
+      setImportingQueue(false);
+      setTimeout(() => setBanner(null), 5000);
+    }
   }, []);
 
   // Handle JSON file upload
@@ -4069,6 +4101,18 @@ export default function Home() {
                 >
                   <HubSpotIcon />
                   {bulkPushing ? "Pushing to HubSpot..." : `Push ${pushableDeals.length} contact${pushableDeals.length > 1 ? "s" : ""} to HubSpot`}
+                </button>
+              )}
+
+              {/* Import approved leads from rating queue */}
+              {queueCount > 0 && (
+                <button
+                  onClick={handleImportApproved}
+                  disabled={importingQueue}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-flyfx-gold/10 border border-flyfx-gold/40 text-flyfx-gold text-sm font-semibold hover:bg-flyfx-gold/20 transition disabled:opacity-50"
+                >
+                  <HubSpotIcon />
+                  {importingQueue ? "Importing..." : `Import ${queueCount} approved lead${queueCount > 1 ? "s" : ""} to HubSpot`}
                 </button>
               )}
 

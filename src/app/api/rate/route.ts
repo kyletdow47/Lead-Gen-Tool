@@ -69,9 +69,3 @@ export async function GET() {
   const ratings = (await readJSON(RATINGS_FILE)) || {};
   return NextResponse.json({ ratings });
 }
-
-// GET /api/rate/queue — return pending imports
-export async function OPTIONS() {
-  const queue = (await readJSON(IMPORT_QUEUE_FILE)) || [];
-  return NextResponse.json({ pending: queue.length, queue });
-}
